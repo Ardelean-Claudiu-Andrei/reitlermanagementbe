@@ -4,14 +4,14 @@ from app.services.auth_service import AuthService
 
 db = SessionLocal()
 
-existing = db.query(User).filter(User.email == "admin@reitler.ro").first()
+existing = db.query(User).filter(User.email == "").first()
 if existing:
     print("Admin există deja!")
 else:
     admin = User(
         name="Administrator",
-        email="admin@reitler.ro",
-        hashed_password=AuthService.hash_password("admin123"),
+        email="",
+        hashed_password=AuthService.hash_password(""),
         role=UserRole.ADMIN,
         is_active=True
     )
