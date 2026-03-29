@@ -2,7 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
-from app.routers import auth, users, products, categories, clients, offers, stats
+from app.routers import (
+    auth, users, products, categories, clients,
+    offers, stats, parts, assemblies, quotes, projects, inventory
+)
 
 app = FastAPI(
     title="Reitler Management API",
@@ -21,13 +24,19 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-app.include_router(auth.router,       prefix="/api/auth",       tags=["Auth"])
-app.include_router(users.router,      prefix="/api/users",      tags=["Users"])
-app.include_router(products.router,   prefix="/api/products",   tags=["Products"])
-app.include_router(categories.router, prefix="/api/categories", tags=["Categories"])
-app.include_router(clients.router,    prefix="/api/clients",    tags=["Clients"])
-app.include_router(offers.router,     prefix="/api/offers",     tags=["Offers"])
-app.include_router(stats.router,      prefix="/api/stats",      tags=["Stats"])
+app.include_router(auth.router,        prefix="/api/auth",        tags=["Auth"])
+app.include_router(users.router,       prefix="/api/users",       tags=["Users"])
+app.include_router(products.router,    prefix="/api/products",    tags=["Products"])
+app.include_router(parts.router,       prefix="/api/parts",       tags=["Parts"])
+app.include_router(assemblies.router,  prefix="/api/assemblies",  tags=["Assemblies"])
+app.include_router(categories.router,  prefix="/api/categories",  tags=["Categories"])
+app.include_router(clients.router,     prefix="/api/clients",     tags=["Clients"])
+app.include_router(quotes.router,      prefix="/api/quotes",      tags=["Quotes"])
+app.include_router(projects.router,    prefix="/api/projects",    tags=["Projects"])
+app.include_router(inventory.router,   prefix="/api/inventory",   tags=["Inventory"])
+app.include_router(offers.router,      prefix="/api/offers",      tags=["Offers"])
+app.include_router(stats.router,       prefix="/api/stats",       tags=["Stats"])
+
 
 @app.get("/health")
 def health_check():
