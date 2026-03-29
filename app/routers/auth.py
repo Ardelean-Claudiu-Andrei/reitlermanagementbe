@@ -4,9 +4,23 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services.auth_service import AuthService
 from app.dependencies import get_current_user
-from app.models.user import User
+from app.models.user import User, UserRole
 
 router = APIRouter()
+
+
+def user_info(u: User) -> dict:
+    first = u.first_name or ""
+    last = u.last_name or ""
+    return {
+        "id": u.id,
+        "firstName": first,
+        "lastName": last,
+        "name": f"{first} {last}".strip() or u.name,
+        "email": u.email,
+        "role": "admin" if u.role == UserRole.ADMIN else "employee",
+    }
+
 
 @router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -17,19 +31,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role
-        }
+        "user": user_info(user),
     }
+
 
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "name": current_user.name,
-        "email": current_user.email,
-        "role": current_user.role
-    }
+    return user_info(current_user)
