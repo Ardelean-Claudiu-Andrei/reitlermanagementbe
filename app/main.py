@@ -6,6 +6,7 @@ from app.routers import (
     auth, users, products, categories, clients,
     offers, stats, parts, assemblies, quotes, projects, inventory
 )
+from app.routers import settings as settings_router
 
 app = FastAPI(
     title="Reitler Management API",
@@ -36,6 +37,7 @@ app.include_router(projects.router,    prefix="/api/projects",    tags=["Project
 app.include_router(inventory.router,   prefix="/api/inventory",   tags=["Inventory"])
 app.include_router(offers.router,      prefix="/api/offers",      tags=["Offers"])
 app.include_router(stats.router,       prefix="/api/stats",       tags=["Stats"])
+app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
 
 
 @app.get("/health")
