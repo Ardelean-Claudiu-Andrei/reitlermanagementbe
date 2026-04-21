@@ -1,12 +1,19 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
+import io
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.quote import Quote
+from app.models.client import Client
+from app.models.product import Product
+from app.routers.settings import get_asset_data_uri
+from app.services.pdf_service import generate_offer_pdf
+from app.services.excel_service import generate_offer_excel
 
 router = APIRouter()
 
@@ -186,3 +193,80 @@ def delete_quote(
         raise HTTPException(status_code=404, detail="Quote not found")
     db.delete(q)
     db.commit()
+
+
+@router.get("/{quote_id}/generate-pdf")
+def generate_quote_pdf(
+    quote_id: str,
+    lang: str = Query(default="ro", pattern="^(ro|hu|de|en)$"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    q, company, products = _load_quote_context(quote_id, db)
+    logo_uri = get_asset_data_uri(db, "header")
+    signature_uri = get_asset_data_uri(db, "signature")
+
+    pdf_bytes = generate_offer_pdf(
+        quote=quote_to_dict(q),
+        company=company,
+        products=products,
+        lang=lang,
+        logo_data_uri=logo_uri,
+        signature_data_uri=signature_uri,
+    )
+
+    filename = f"offer-{quote_id[:8]}-{lang}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _load_quote_context(quote_id: str, db: Session):
+    """Shared helper: load quote + company + products from DB."""
+    q = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="Quote not found")
+
+    company = None
+    if q.company_id:
+        client = db.query(Client).filter(Client.id == q.company_id).first()
+        if client:
+            company = {"id": client.id, "name": client.name}
+
+    product_ids = {item.get("productId") for item in (q.items or []) if item.get("productId")}
+    db_products = db.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []
+    products = [
+        {"id": p.id, "name": p.name, "description": p.description or {}}
+        for p in db_products
+    ]
+    return q, company, products
+
+
+@router.get("/{quote_id}/generate-excel")
+def generate_quote_excel(
+    quote_id: str,
+    lang: str = Query(default="ro", pattern="^(ro|hu|de|en)$"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    q, company, products = _load_quote_context(quote_id, db)
+    logo_uri = get_asset_data_uri(db, "header")
+    signature_uri = get_asset_data_uri(db, "signature")
+
+    xlsx_bytes = generate_offer_excel(
+        quote=quote_to_dict(q),
+        company=company,
+        products=products,
+        lang=lang,
+        logo_data_uri=logo_uri,
+        signature_data_uri=signature_uri,
+    )
+
+    filename = f"offer-{quote_id[:8]}-{lang}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

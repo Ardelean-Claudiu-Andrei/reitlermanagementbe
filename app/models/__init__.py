@@ -10,3 +10,4 @@ from app.models.inventory import InventoryItem
 from app.models.offer import Offer, OfferItem, OfferStatus
 from app.models.stock_movement import StockMovement, MovementType
 from app.models.setting import Setting
+from app.models.branding_asset import BrandingAsset
