@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
@@ -246,6 +247,7 @@ def add_checklist_item(
     checklist = list(p.checklist or [])
     checklist.append(body.model_dump())
     p.checklist = checklist
+    flag_modified(p, "checklist")
     db.commit()
     db.refresh(p)
     return project_to_dict(p)
@@ -269,6 +271,7 @@ def toggle_checklist_item(
             item["doneAt"] = today if item["done"] else None
             break
     p.checklist = checklist
+    flag_modified(p, "checklist")
     db.commit()
     db.refresh(p)
     return project_to_dict(p)
@@ -318,6 +321,7 @@ def resolve_issue(
             issue["solvedAt"] = today
             break
     p.issues = issues
+    flag_modified(p, "issues")
     activity = list(p.activity or [])
     activity.append({
         "id": str(uuid.uuid4()),
@@ -326,6 +330,7 @@ def resolve_issue(
         "timestamp": datetime.now().isoformat(),
     })
     p.activity = activity
+    flag_modified(p, "activity")
     db.commit()
     db.refresh(p)
     return project_to_dict(p)

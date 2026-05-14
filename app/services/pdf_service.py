@@ -199,6 +199,24 @@ def _offer_number(quote_id: str, date: datetime) -> str:
     return f"S{yr}{mo}{dy}{seq or '001'}"
 
 
+def _clean_offer_topic(name: str, client_name: str, offer_for: str) -> str:
+    result = name
+    if client_name:
+        prefix = client_name.upper() + " - "
+        if result.upper().startswith(prefix):
+            result = result[len(prefix):].strip()
+    # Strip any known language variant of the offer_for prefix,
+    # because quote.name is always stored with the language it was created in.
+    all_prefixes = [tr["offerFor"] for tr in T.values()]
+    # Put current language first so it's preferred when ambiguous
+    all_prefixes = [offer_for] + [p for p in all_prefixes if p != offer_for]
+    for p in all_prefixes:
+        if result.upper().startswith((p + " ").upper()):
+            result = result[len(p):].strip()
+            break
+    return result
+
+
 def _format_date(date: datetime, lang: str) -> str:
     month = _MONTHS[lang][date.month - 1]
     if lang == "hu":
@@ -222,6 +240,7 @@ def generate_offer_html(
     offer_no = _offer_number(quote["id"], today)
     date_str = _format_date(today, lang)
     client_name = company["name"] if company else ""
+    offer_topic = _clean_offer_topic(quote.get("name", ""), client_name, tr["offerFor"])
 
     items = quote.get("items") or []
     item_rows = []
@@ -236,9 +255,9 @@ def generate_offer_html(
 
         sub_lines = ""
         if product_desc:
-            sub_lines += f'<br/><span class="sub-desc">{_esc(product_desc)}</span>'
+            sub_lines += f'<br/><span class="sub-desc">{_esc(product_desc).replace(chr(10), "<br/>")}</span>'
         if notes:
-            sub_lines += f'<br/><span class="sub-desc">{_esc(notes)}</span>'
+            sub_lines += f'<br/><span class="sub-desc">{_esc(notes).replace(chr(10), "<br/>")}</span>'
 
         item_rows.append(f"""
       <tr>
@@ -298,7 +317,7 @@ def generate_offer_html(
 <html lang="{lang}">
 <head>
   <meta charset="UTF-8"/>
-  <title>{_esc(tr["offerFor"])} {_esc(quote.get("name", ""))}</title>
+  <title>{_esc(tr["offerFor"])} {_esc(offer_topic)}</title>
   <style>
     @page {{
       size: A4;
@@ -466,7 +485,7 @@ def generate_offer_html(
   </table>
 
   <!-- Offer title -->
-  <div class="offer-title">{_esc(tr["offerFor"])} {_esc(quote.get("name", ""))}</div>
+  <div class="offer-title">{_esc(tr["offerFor"])} {_esc(offer_topic)}</div>
   <div class="intro">{_esc(tr["intro"])}</div>
 
   <!-- Items table -->
