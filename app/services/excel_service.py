@@ -6,14 +6,14 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 
-from app.services.pdf_service import T, _fmt, _offer_number, _format_date
+from app.services.pdf_service import T, _fmt, _offer_number, _format_date, _clean_offer_topic
 
 # ─── Column layout (A–H, 8 columns) ──────────────────────────────────────────
 # A=Nr(6)  B=Description(46)  C=spacer(3)  D=spacer(3)  E=spacer(3)
 # F=Buc(7)  G=UnitPrice(14)  H=Total(14)
 # Description area B:E merged = 55 chars   Logo anchored at D in company header
 
-_COL_A, _COL_B, _COL_F, _COL_G, _COL_H = 1, 2, 6, 7, 8
+_COL_A, _COL_B, _COL_E, _COL_F, _COL_G, _COL_H = 1, 2, 5, 6, 7, 8
 _GREY   = "D9D9D9"
 _LIGHT  = "F5F5F5"
 
@@ -31,6 +31,24 @@ def _fill(hex_color):
 def _box():
     t = Side(style="thin", color="000000")
     return Border(left=t, right=t, top=t, bottom=t)
+
+
+def _box_name_row():
+    """Top/left/right border only — no bottom (name row of a product)."""
+    t = Side(style="thin", color="000000")
+    return Border(left=t, right=t, top=t, bottom=None)
+
+
+def _box_desc_mid():
+    """Left/right border only — no top or bottom (middle description lines)."""
+    t = Side(style="thin", color="000000")
+    return Border(left=t, right=t, top=None, bottom=None)
+
+
+def _box_desc_last():
+    """Left/right/bottom border — no top (last description line of a product)."""
+    t = Side(style="thin", color="000000")
+    return Border(left=t, right=t, top=None, bottom=t)
 
 
 def _align(h="left", v="center", wrap=False):
@@ -102,9 +120,9 @@ def generate_offer_excel(
 
     ws.column_dimensions["A"].width = 6
     ws.column_dimensions["B"].width = 46
-    ws.column_dimensions["C"].width = 3
-    ws.column_dimensions["D"].width = 3
-    ws.column_dimensions["E"].width = 3
+    ws.column_dimensions["C"].width = 6
+    ws.column_dimensions["D"].width = 6
+    ws.column_dimensions["E"].width = 6
     ws.column_dimensions["F"].width = 7
     ws.column_dimensions["G"].width = 14
     ws.column_dimensions["H"].width = 14
@@ -112,9 +130,9 @@ def generate_offer_excel(
     row = 1
 
     # ── Company header – plain white, text in A, logo in D area ───────────────
-    ws.row_dimensions[row].height = 18
+    ws.row_dimensions[row].height = 18  # row 1, ≥16
     _set(ws, row, _COL_A, "S.C. SMSS REITLER S.R.L.",
-         font=_font(bold=True, size=13), align=_align())
+         font=_font(bold=False, size=10, name="Times New Roman"), align=_align())
     logo_start = row
     row += 1
 
@@ -129,41 +147,48 @@ def generate_offer_excel(
         "E-mail: smsreitler@gmail.com",
         "Web: www.smsreitler.ro",
     ]:
-        ws.row_dimensions[row].height = 13
+        ws.row_dimensions[row].height = 16  # rows 2–10, ≥16 for logo height
         _set(ws, row, _COL_A, line, font=_font(size=8.5), align=_align())
         row += 1
 
-    # Embed logo anchored at column D, top row of company section
+    # Embed logo anchored at column C, top row of company section
     if logo_data_uri:
         stream = _uri_stream(logo_data_uri)
         if stream:
-            img = _xl_image(stream, max_w=210, max_h=110)
+            img = _xl_image(stream, max_w=360, max_h=300)
             if img:
-                ws.add_image(img, f"D{logo_start}")
+                ws.add_image(img, f"C{logo_start}")
 
-    row += 1  # empty spacer
+    row += 1  # empty spacer (row 11)
 
-    # ── Client / date / reg ────────────────────────────────────────────────────
-    ws.row_dimensions[row].height = 16
-    c = _merge(ws, row, _COL_A, row, _COL_F)
+    # ── Rows 12-13: Client / Date / Reg — client merged vertically ───────────
+    ws.row_dimensions[row].height     = 16
+    ws.row_dimensions[row + 1].height = 14
+
+    c = _merge(ws, row, _COL_A, row + 1, _COL_F)   # A12:F13 merged
     c.value     = f"{tr['to']} {client_name},"
-    c.font      = _font(bold=True, size=11)
-    c.alignment = _align("center")
-    _set(ws, row, _COL_G, tr["offerDate"], font=_font(bold=True, size=9), align=_align("right"))
-    _set(ws, row, _COL_H, date_str,        font=_font(bold=True, size=9), align=_align())
-    row += 1
+    c.font      = _font(bold=True, size=12)
+    c.alignment = _align("center", v="center")
+    c.border    = _box()
 
-    ws.row_dimensions[row].height = 14
-    _set(ws, row, _COL_G, tr["regNo"],  font=_font(bold=True, size=9), align=_align("right"))
-    _set(ws, row, _COL_H, offer_no,     font=_font(bold=True, size=9), align=_align())
-    row += 1
+    _set(ws, row,     _COL_G, tr["offerDate"],       # G12
+         font=_font(bold=True,  size=11), align=_align("right"), border=_box())
+    _set(ws, row,     _COL_H, date_str,              # H12
+         font=_font(bold=False, size=11), align=_align(),         border=_box())
+    _set(ws, row + 1, _COL_G, tr["regNo"],           # G13
+         font=_font(bold=True,  size=11), align=_align("right"), border=_box())
+    _set(ws, row + 1, _COL_H, offer_no,              # H13
+         font=_font(bold=False, size=11), align=_align(),         border=_box())
+    row += 2
 
-    # ── Offer title ────────────────────────────────────────────────────────────
+    # ── Row 14: Offer title ────────────────────────────────────────────────────
     ws.row_dimensions[row].height = 22
     c = _merge(ws, row, _COL_A, row, _COL_H)
-    c.value     = quote.get('name', '')
+    offer_topic = _clean_offer_topic(quote.get('name', ''), client_name, tr["offerFor"])
+    c.value     = f"{tr['offerFor']} {offer_topic}".strip()
     c.font      = _font(bold=True, size=13)
     c.alignment = _align("center")
+    c.border    = _box()
     row += 1
 
     # ── Intro ──────────────────────────────────────────────────────────────────
@@ -171,11 +196,11 @@ def generate_offer_excel(
     ws.row_dimensions[row].height = 14
     c = _merge(ws, row, _COL_A, row, _COL_H)
     c.value     = tr["intro"]
-    c.font      = _font(size=9)
+    c.font      = _font(size=12)
     c.alignment = _align(wrap=True)
     row += 1
 
-    row += 1  # spacer before table
+    # (no spacer before table)
 
     # ── Table header – 2 rows ──────────────────────────────────────────────────
     th1, th2 = row, row + 1
@@ -190,7 +215,7 @@ def generate_offer_excel(
     _set(ws, th2, _COL_A, "Crt.",  font=hf, fill=hfill, align=_align("center"), border=_box())
 
     # B:E "Denumire reper" – spans both rows
-    c = _merge(ws, th1, _COL_B, th2, 5)   # B to E, rows th1:th2
+    c = _merge(ws, th1, _COL_B, th2, 5)
     c.value     = tr["colName"]
     c.font      = hf
     c.fill      = hfill
@@ -259,30 +284,33 @@ def generate_offer_excel(
         _set(ws, r0, _COL_A, idx + 1,
              font=_font(size=9), align=_align("center"), border=_box())
 
-        # Product name row (bold)
+        # Product name row (bold) — open bottom if description lines follow
         c = _merge(ws, r0, _COL_B, r0, 5)
         c.value     = prod_name
-        c.font      = _font(bold=True, size=9)
+        c.font      = _font(bold=True, size=12)
         c.alignment = _align()
-        c.border    = _box()
+        c.border    = _box() if not desc_lines else _box_name_row()
 
-        # Description lines – one per row
+        # Description lines – one per row, no internal borders
         for i, dl in enumerate(desc_lines):
             r = r0 + 1 + i
-            ws.row_dimensions[r].height = 13
+            is_last = (i == len(desc_lines) - 1)
+            ws.row_dimensions[r].height = 19 if is_last else 13
             c = _merge(ws, r, _COL_B, r, 5)
             c.value     = dl
-            c.font      = _font(size=8.5)
+            c.font      = _font(size=12)
             c.alignment = _align()
-            c.border    = _box()
+            c.border    = _box_desc_last() if is_last else _box_desc_mid()
+
+
 
         # Qty / prices (merged vertically, values on first row)
         _set(ws, r0, _COL_F, qty,
-             font=_font(size=9), align=_align("center"), border=_box())
+             font=_font(size=12), align=_align("center"), border=_box())
         _set(ws, r0, _COL_G, unit_price,
-             font=_font(size=9), align=_align("right"), border=_box(), num_fmt='#,##0.00')
+             font=_font(size=12), align=_align("center"), border=_box(), num_fmt='#,##0.00')
         _set(ws, r0, _COL_H, line_total,
-             font=_font(size=9), align=_align("right"), border=_box(), num_fmt='#,##0.00')
+             font=_font(size=12), align=_align("center"), border=_box(), num_fmt='#,##0.00')
 
         row += n
 
@@ -305,47 +333,46 @@ def generate_offer_excel(
         c.value     = tr["installation"]
         c.font      = _font(bold=True, size=9)
         c.alignment = _align()
-        c.border    = _box()
+        c.border    = _box_name_row()
 
-        ws.row_dimensions[r0 + 1].height = 13
+        ws.row_dimensions[r0 + 1].height = 19
         c = _merge(ws, r0 + 1, _COL_B, r0 + 1, 5)
         c.value     = tr["installationSub"]
         c.font      = _font(size=8.5)
         c.alignment = _align()
-        c.border    = _box()
+        c.border    = _box_desc_last()
 
         _set(ws, r0, _COL_F, 1,
              font=_font(size=9), align=_align("center"), border=_box())
         _set(ws, r0, _COL_G, installation,
-             font=_font(size=9), align=_align("right"), border=_box(), num_fmt='#,##0.00')
+             font=_font(size=9), align=_align("center"), border=_box(), num_fmt='#,##0.00')
         _set(ws, r0, _COL_H, installation,
-             font=_font(size=9), align=_align("right"), border=_box(), num_fmt='#,##0.00')
+             font=_font(size=9), align=_align("center"), border=_box(), num_fmt='#,##0.00')
 
         row += n
 
     # ── Grand total ────────────────────────────────────────────────────────────
-    ws.row_dimensions[row].height = 20
-    c = _merge(ws, row, _COL_A, row, _COL_G)
+    ws.row_dimensions[row].height = 28
+    # Label merge A:E (se termină înainte de Buc)
+    c = _merge(ws, row, _COL_A, row, _COL_E)
     c.value     = tr["grandTotal"]
-    c.font      = _font(bold=True, size=11)
+    c.font      = _font(bold=True, size=13)
     c.fill      = _fill(_LIGHT)
     c.alignment = _align("right")
     c.border    = _box()
-    _set(ws, row, _COL_H, grand_total,
-         font=_font(bold=True, size=11), fill=_fill(_LIGHT),
-         align=_align("right"), border=_box(), num_fmt='#,##0.00')
-    row += 2
 
-    # ── Price note ─────────────────────────────────────────────────────────────
-    ws.row_dimensions[row].height = 14
-    c = _merge(ws, row, _COL_A, row, _COL_H)
-    c.value     = tr["priceNote"]
-    c.font      = _font(bold=True, size=9)
-    c.alignment = _align()
+    # Valoarea merge F:H, centrat
+    c2 = _merge(ws, row, _COL_F, row, _COL_H)
+    c2.value      = grand_total
+    c2.font       = _font(bold=True, size=13)
+    c2.fill       = _fill(_LIGHT)
+    c2.alignment  = _align("center")
+    c2.border     = _box()
+    c2.number_format = '#,##0.00'
     row += 2
 
     # ── Conditions title ───────────────────────────────────────────────────────
-    ws.row_dimensions[row].height = 20
+    ws.row_dimensions[row].height = 28
     c = _merge(ws, row, _COL_A, row, _COL_H)
     c.value     = tr["conditionsTitle"]
     c.font      = _font(bold=True, size=12, underline="single")
@@ -354,24 +381,13 @@ def generate_offer_excel(
 
     row += 1  # spacer
 
-    # Helper: one-line condition with bold label in A:B and value in C:H
-    def _cond(label, value, h=14):
-        nonlocal row
-        ws.row_dimensions[row].height = h
-        _set(ws, row, _COL_A, label, font=_font(bold=True, size=9), align=_align())
-        c2 = _merge(ws, row, _COL_B, row, _COL_H)
-        c2.value     = value
-        c2.font      = _font(size=9)
-        c2.alignment = _align(wrap=True)
-        row += 1
-
-    # Helper: full-width merged bold line (used for combined label+value)
-    def _full(text, bold=True, h=14, italic=False):
+    # Helper: full-width merged line
+    def _full(text, bold=True, h=14, italic=False, size=12):
         nonlocal row
         ws.row_dimensions[row].height = h
         c = _merge(ws, row, _COL_A, row, _COL_H)
         c.value     = text
-        c.font      = _font(bold=bold, italic=italic, size=9)
+        c.font      = _font(bold=bold, italic=italic, size=size)
         c.alignment = _align(wrap=True)
         row += 1
 
@@ -379,58 +395,74 @@ def generate_offer_excel(
           bold=True)
     row += 1
 
-    # Not-included list
+    # ── Not-included list ──────────────────────────────────────────────────────
     _set(ws, row, _COL_A, tr["notIncludeLabel"],
-         font=_font(bold=True, size=9), align=_align())
+         font=_font(bold=True, size=12), align=_align())
     row += 1
     for excl in tr["notInclude"]:
         ws.row_dimensions[row].height = 13
         c = _merge(ws, row, _COL_A, row, _COL_H)
         c.value     = f"- {excl}"
-        c.font      = _font(size=8.5)
+        c.font      = _font(size=10)
         c.alignment = _align(wrap=True)
         row += 1
 
     row += 1
 
-    _cond(tr["warrantyLabel"], tr["warrantyText"])
-    _full(tr["serviceText"], bold=False)
+    # ── Warranty ───────────────────────────────────────────────────────────────
+    ws.row_dimensions[row].height = 14
+    c = _merge(ws, row, _COL_A, row, _COL_H)
+    c.value     = tr["warrantyLabel"]
+    c.font      = _font(bold=True, size=11)
+    c.alignment = _align()
     row += 1
 
-    # Payment – label on first line, subsequent lines indented
-    _set(ws, row, _COL_A, tr["paymentLabel"], font=_font(bold=True, size=9), align=_align())
-    for i, pay in enumerate([tr["payment1"], tr["payment2"], tr["payment3"]]):
+    ws.row_dimensions[row].height = 14
+    c = _merge(ws, row, _COL_A, row, _COL_H)
+    c.value     = tr["warrantyText"]
+    c.font      = _font(size=11)
+    c.alignment = _align()
+    row += 1
+
+    row += 2  # blank rows before service text
+    _full(tr["serviceText"], bold=False, size=11)
+    row += 2  # blank rows after service text
+
+    # ── Payment ────────────────────────────────────────────────────────────────
+    _full(tr["paymentLabel"], bold=True, size=12)
+    for pay in [tr["payment1"], tr["payment2"], tr["payment3"]]:
         ws.row_dimensions[row].height = 13
         c = _merge(ws, row, _COL_B, row, _COL_H)
         c.value     = pay
-        c.font      = _font(size=9)
+        c.font      = _font(size=11)
         c.alignment = _align()
         row += 1
 
     row += 1
 
-    _full(f"{tr['validityLabel']}  {tr['validity21']}", bold=True)
+    # ── Validity ───────────────────────────────────────────────────────────────
+    _full(f"{tr['validityLabel']}  {tr['validity21']}", bold=True, size=12)
     row += 1
 
     # ── Closing ────────────────────────────────────────────────────────────────
     for line in [tr["before"], tr["contact"], tr["review"]]:
-        _full(line, bold=False, h=13)
+        _full(line, bold=False, h=13, size=11)
 
     row += 1
 
     # ── Signature ──────────────────────────────────────────────────────────────
     ws.row_dimensions[row].height = 13
-    _set(ws, row, _COL_A, tr["regards"], font=_font(size=9), align=_align())
+    _set(ws, row, _COL_A, tr["regards"], font=_font(size=11), align=_align())
     row += 1
 
     ws.row_dimensions[row].height = 14
-    _set(ws, row, _COL_A, "Alexandru Reitler", font=_font(bold=True, size=10), align=_align())
+    _set(ws, row, _COL_A, "Alexandru Reitler", font=_font(bold=True, size=11), align=_align())
     row += 1
 
     if signature_data_uri:
         stream = _uri_stream(signature_data_uri)
         if stream:
-            sig_img = _xl_image(stream, max_w=140, max_h=80)
+            sig_img = _xl_image(stream, max_w=240, max_h=180)
             if sig_img:
                 ws.add_image(sig_img, f"B{row}")
 
