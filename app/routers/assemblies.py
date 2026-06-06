@@ -15,6 +15,9 @@ class AssemblyCreate(BaseModel):
     name: str
     description: dict = {}
     parts: list = []
+    compositionType: str = "standalone"
+    physicalLocation: str = ""
+    productionSteps: list = []
     notes: str = ""
 
 
@@ -23,6 +26,9 @@ class AssemblyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[dict] = None
     parts: Optional[list] = None
+    compositionType: Optional[str] = None
+    physicalLocation: Optional[str] = None
+    productionSteps: Optional[list] = None
     notes: Optional[str] = None
 
 
@@ -33,6 +39,9 @@ def assembly_to_dict(a: Assembly) -> dict:
         "name": a.name,
         "description": a.description or {"ro": "", "hu": "", "de": "", "en": ""},
         "parts": a.parts or [],
+        "compositionType": a.composition_type or "standalone",
+        "physicalLocation": a.physical_location or "",
+        "productionSteps": a.production_steps or [],
         "notes": a.notes or "",
         "createdAt": a.created_at.isoformat() if a.created_at else None,
         "updatedAt": a.updated_at.isoformat() if a.updated_at else None,
@@ -73,6 +82,9 @@ def create_assembly(
         name=body.name,
         description=body.description or {"ro": "", "hu": "", "de": "", "en": ""},
         parts=body.parts or [],
+        composition_type=body.compositionType or "standalone",
+        physical_location=body.physicalLocation or "",
+        production_steps=body.productionSteps or [],
         notes=body.notes,
     )
     db.add(a)
@@ -92,6 +104,9 @@ def update_assembly(
     if not a:
         raise HTTPException(status_code=404, detail="Assembly not found")
     if body.code is not None:
+        existing = db.query(Assembly).filter(Assembly.code == body.code, Assembly.id != assembly_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Assembly code already exists")
         a.code = body.code
     if body.name is not None:
         a.name = body.name
@@ -99,6 +114,12 @@ def update_assembly(
         a.description = body.description
     if body.parts is not None:
         a.parts = body.parts
+    if body.compositionType is not None:
+        a.composition_type = body.compositionType
+    if body.physicalLocation is not None:
+        a.physical_location = body.physicalLocation
+    if body.productionSteps is not None:
+        a.production_steps = body.productionSteps
     if body.notes is not None:
         a.notes = body.notes
     db.commit()

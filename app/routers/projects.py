@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, date
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -387,6 +388,27 @@ def create_project_from_quote(
     db.commit()
     db.refresh(p)
     return project_to_dict(p)
+
+
+@router.get("/{project_id}/export-production-steps")
+def export_project_production_steps_pdf(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.steps_pdf_service import generate_project_steps_pdf
+    pdf_bytes = generate_project_steps_pdf(p, db)
+
+    filename = f"pasi-productie-{p.code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
