@@ -11,6 +11,7 @@ router = APIRouter()
 
 
 class PartCreate(BaseModel):
+    code: Optional[str] = None
     name: str
     description: dict = {}
     category: str = ""
@@ -18,13 +19,21 @@ class PartCreate(BaseModel):
     basePrice: float = 0.0
     minimumStock: float = 0.0
     quantity: float = 0.0
+    requiredQuantity: int = 1
     location: str = ""
+    physicalLocation: str = ""
+    drawingLocation: str = ""
+    requiresLaserCutting: bool = False
+    weldingDrawingLocation: str = ""
+    bendingDrawingLocation: str = ""
+    productionSteps: list = []
     notes: str = ""
     fileName: str = ""
     fileLocation: str = ""
 
 
 class PartUpdate(BaseModel):
+    code: Optional[str] = None
     name: Optional[str] = None
     description: Optional[dict] = None
     category: Optional[str] = None
@@ -32,7 +41,14 @@ class PartUpdate(BaseModel):
     basePrice: Optional[float] = None
     minimumStock: Optional[float] = None
     quantity: Optional[float] = None
+    requiredQuantity: Optional[int] = None
     location: Optional[str] = None
+    physicalLocation: Optional[str] = None
+    drawingLocation: Optional[str] = None
+    requiresLaserCutting: Optional[bool] = None
+    weldingDrawingLocation: Optional[str] = None
+    bendingDrawingLocation: Optional[str] = None
+    productionSteps: Optional[list] = None
     notes: Optional[str] = None
     fileName: Optional[str] = None
     fileLocation: Optional[str] = None
@@ -41,6 +57,7 @@ class PartUpdate(BaseModel):
 def part_to_dict(p: Part) -> dict:
     return {
         "id": p.id,
+        "code": p.code or "",
         "name": p.name,
         "description": p.description or {"ro": "", "hu": "", "de": "", "en": ""},
         "category": p.category or "",
@@ -48,7 +65,14 @@ def part_to_dict(p: Part) -> dict:
         "basePrice": p.base_price,
         "minimumStock": p.minimum_stock or 0.0,
         "quantity": p.quantity or 0.0,
+        "requiredQuantity": p.required_quantity or 1,
         "location": p.location or "",
+        "physicalLocation": p.physical_location or "",
+        "drawingLocation": p.drawing_location or "",
+        "requiresLaserCutting": p.requires_laser_cutting or False,
+        "weldingDrawingLocation": p.welding_drawing_location or "",
+        "bendingDrawingLocation": p.bending_drawing_location or "",
+        "productionSteps": p.production_steps or [],
         "notes": p.notes or "",
         "fileName": p.file_name or "",
         "fileLocation": p.file_location or "",
@@ -84,7 +108,10 @@ def create_part(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
+    if body.code and db.query(Part).filter(Part.code == body.code).first():
+        raise HTTPException(status_code=400, detail="Part code already exists")
     p = Part(
+        code=body.code or None,
         name=body.name,
         description=body.description or {"ro": "", "hu": "", "de": "", "en": ""},
         category=body.category,
@@ -92,7 +119,14 @@ def create_part(
         base_price=body.basePrice,
         minimum_stock=body.minimumStock,
         quantity=body.quantity,
+        required_quantity=body.requiredQuantity,
         location=body.location,
+        physical_location=body.physicalLocation,
+        drawing_location=body.drawingLocation,
+        requires_laser_cutting=body.requiresLaserCutting,
+        welding_drawing_location=body.weldingDrawingLocation,
+        bending_drawing_location=body.bendingDrawingLocation,
+        production_steps=body.productionSteps or [],
         notes=body.notes,
         file_name=body.fileName,
         file_location=body.fileLocation,
@@ -113,6 +147,10 @@ def update_part(
     p = db.query(Part).filter(Part.id == part_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Part not found")
+    if body.code is not None:
+        if body.code and db.query(Part).filter(Part.code == body.code, Part.id != part_id).first():
+            raise HTTPException(status_code=400, detail="Part code already exists")
+        p.code = body.code or None
     if body.name is not None:
         p.name = body.name
     if body.description is not None:
@@ -127,8 +165,22 @@ def update_part(
         p.minimum_stock = body.minimumStock
     if body.quantity is not None:
         p.quantity = body.quantity
+    if body.requiredQuantity is not None:
+        p.required_quantity = body.requiredQuantity
     if body.location is not None:
         p.location = body.location
+    if body.physicalLocation is not None:
+        p.physical_location = body.physicalLocation
+    if body.drawingLocation is not None:
+        p.drawing_location = body.drawingLocation
+    if body.requiresLaserCutting is not None:
+        p.requires_laser_cutting = body.requiresLaserCutting
+    if body.weldingDrawingLocation is not None:
+        p.welding_drawing_location = body.weldingDrawingLocation
+    if body.bendingDrawingLocation is not None:
+        p.bending_drawing_location = body.bendingDrawingLocation
+    if body.productionSteps is not None:
+        p.production_steps = body.productionSteps
     if body.notes is not None:
         p.notes = body.notes
     if body.fileName is not None:

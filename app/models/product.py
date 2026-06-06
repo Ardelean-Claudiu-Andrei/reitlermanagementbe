@@ -15,13 +15,14 @@ class Product(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     code = Column(String(100), unique=True, index=True, nullable=False)
     name = Column(String(200), nullable=False)
-    description = Column(JSON, default=dict)  # {"ro": "", "hu": "", "de": "", "en": ""}
+    description = Column(JSON, default=dict)         # {"ro": "", "hu": "", "de": "", "en": ""}
     category = Column(String(50), nullable=False, default="other")
     unit = Column(String(50), default="buc")
     base_price = Column(Float, nullable=False, default=0.0)
-    assembly_ids = Column(JSON, default=list)  # list of Assembly IDs
-    part_ids = Column(JSON, default=list)  # list of Part IDs
-    assembly_steps = Column(JSON, default=list)  # list of AssemblyStep dicts
+    assembly_ids = Column(JSON, default=list)        # list of Assembly IDs
+    part_ids = Column(JSON, default=list)            # list of Part IDs
+    assembly_steps = Column(JSON, default=list)      # product-level production steps (existing field)
+    production_steps = Column(JSON, default=list)    # alias kept separate for forward compat
     notes = Column(Text, default="")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
