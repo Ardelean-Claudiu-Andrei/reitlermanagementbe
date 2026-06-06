@@ -34,21 +34,24 @@ def _box():
 
 
 def _box_name_row():
-    """Top/left/right border only — no bottom (name row of a product)."""
-    t = Side(style="thin", color="000000")
-    return Border(left=t, right=t, top=t, bottom=None)
+    """Top/left/right black + white bottom — white overrides the grey gridline below."""
+    b = Side(style="thin", color="000000")
+    w = Side(style="thin", color="FFFFFF")
+    return Border(left=b, right=b, top=b, bottom=w)
 
 
 def _box_desc_mid():
-    """Left/right border only — no top or bottom (middle description lines)."""
-    t = Side(style="thin", color="000000")
-    return Border(left=t, right=t, top=None, bottom=None)
+    """Left/right black + white top/bottom — white overrides gridlines above and below."""
+    b = Side(style="thin", color="000000")
+    w = Side(style="thin", color="FFFFFF")
+    return Border(left=b, right=b, top=w, bottom=w)
 
 
 def _box_desc_last():
-    """Left/right/bottom border — no top (last description line of a product)."""
-    t = Side(style="thin", color="000000")
-    return Border(left=t, right=t, top=None, bottom=t)
+    """Left/right/bottom black + white top — white overrides the gridline above."""
+    b = Side(style="thin", color="000000")
+    w = Side(style="thin", color="FFFFFF")
+    return Border(left=b, right=b, top=w, bottom=b)
 
 
 def _align(h="left", v="center", wrap=False):
@@ -369,6 +372,14 @@ def generate_offer_excel(
     c2.alignment  = _align("center")
     c2.border     = _box()
     c2.number_format = '#,##0.00'
+    row += 2
+
+    # ── Price note ─────────────────────────────────────────────────────────────
+    ws.row_dimensions[row].height = 18
+    c = _merge(ws, row, _COL_A, row, _COL_H)
+    c.value     = tr["priceNote"]
+    c.font      = _font(bold=True, size=13)
+    c.alignment = _align(wrap=True)
     row += 2
 
     # ── Conditions title ───────────────────────────────────────────────────────
