@@ -10,54 +10,75 @@ HTML_TEMPLATE = """
   <meta charset="UTF-8"/>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; padding: 24px; }}
-    h1 {{ font-size: 15pt; margin-bottom: 2px; }}
-    .subtitle {{ font-size: 9pt; color: #666; margin-bottom: 20px; }}
-    .footer {{ margin-top: 24px; font-size: 8pt; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }}
+    @page {{ size: A4; margin: 18mm 15mm; }}
+    body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; }}
 
-    /* Product block */
-    .product-block {{ margin-bottom: 28px; page-break-inside: avoid; }}
-    .product-header {{
-      background: #1a1a2e;
-      color: #fff;
-      padding: 8px 12px;
-      border-radius: 4px 4px 0 0;
-      font-size: 11pt;
+    /* Page header */
+    .doc-header {{ border-bottom: 2px solid #1a1a2e; padding-bottom: 8px; margin-bottom: 16px; }}
+    .doc-title {{ font-size: 16pt; font-weight: bold; color: #1a1a2e; }}
+    .doc-subtitle {{ font-size: 9pt; color: #666; margin-top: 2px; }}
+    .footer {{ margin-top: 20px; font-size: 8pt; color: #999; border-top: 1px solid #ddd; padding-top: 6px; }}
+
+    /* Product section */
+    .product-block {{ margin-bottom: 24px; }}
+    .product-title {{
+      font-size: 12pt;
       font-weight: bold;
-      display: flex;
-      justify-content: space-between;
+      color: #1a1a2e;
+      border-bottom: 1.5px solid #1a1a2e;
+      padding-bottom: 4px;
+      margin-bottom: 10px;
     }}
-    .product-header .code {{ font-family: monospace; font-size: 9pt; opacity: 0.8; }}
-    .product-body {{ border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; padding: 8px 12px; }}
+    .product-code {{ font-family: monospace; font-size: 9pt; color: #666; font-weight: normal; margin-left: 8px; }}
+
+    /* Assembly section */
+    .assembly-section {{ margin: 8px 0 8px 12px; }}
+    .assembly-title {{
+      font-size: 10pt;
+      font-weight: bold;
+      color: #2a3a5e;
+      border-left: 3px solid #c0c8e0;
+      padding-left: 8px;
+      margin-bottom: 4px;
+    }}
+    .assembly-code-label {{ font-family: monospace; font-size: 8pt; color: #888; font-weight: normal; }}
+
+    /* Part section */
+    .part-section {{ margin: 6px 0 6px 20px; }}
+    .part-title {{
+      font-size: 9pt;
+      font-weight: 600;
+      color: #444;
+      border-left: 2px solid #e0e0e0;
+      padding-left: 6px;
+      margin-bottom: 3px;
+    }}
+    .part-direct-label {{ font-size: 8pt; color: #888; font-style: italic; }}
+    .laser-label {{ font-size: 8pt; color: #1a6fa8; }}
 
     /* Step rows */
-    .step-row {{ display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f0; }}
-    .step-row:last-child {{ border-bottom: none; }}
-    .step-checkbox {{ width: 14px; height: 14px; border: 1.5px solid #555; flex-shrink: 0; margin-top: 2px; }}
+    .steps-list {{ margin: 2px 0 6px 0; }}
+    .step-row {{ display: flex; align-items: flex-start; gap: 8px; padding: 3px 0; }}
+    .step-checkbox {{
+      width: 13px; height: 13px;
+      border: 1.5px solid #444;
+      flex-shrink: 0; margin-top: 1px;
+      display: inline-block;
+    }}
+    .step-num {{ font-size: 9pt; color: #888; flex-shrink: 0; min-width: 18px; }}
     .step-content {{ flex: 1; }}
-    .step-name {{ font-weight: bold; font-size: 10pt; }}
-    .step-type {{ display: inline-block; background: #e8f4fd; color: #1a6fa8; border: 1px solid #b3d7f5; border-radius: 3px; padding: 0 5px; font-size: 8pt; font-family: monospace; margin-left: 6px; }}
-    .step-desc {{ font-size: 9pt; color: #666; margin-top: 2px; }}
+    .step-name {{ font-size: 10pt; }}
+    .step-desc {{ font-size: 8.5pt; color: #666; margin-top: 1px; padding-left: 26px; }}
 
-    /* Assembly block */
-    .assembly-block {{ margin: 8px 0 8px 16px; border: 1px solid #ddd; border-radius: 3px; }}
-    .assembly-header {{ background: #f0f4f8; padding: 5px 10px; font-weight: bold; font-size: 9pt; border-bottom: 1px solid #ddd; display: flex; gap: 8px; align-items: center; }}
-    .assembly-code {{ font-family: monospace; font-size: 8pt; color: #888; }}
-    .assembly-body {{ padding: 4px 10px; }}
-
-    /* Part block */
-    .part-block {{ margin: 6px 0 6px 16px; border: 1px solid #e8e8e8; border-radius: 3px; }}
-    .part-header {{ background: #fafafa; padding: 4px 8px; font-weight: 600; font-size: 9pt; border-bottom: 1px solid #e8e8e8; display: flex; gap: 6px; align-items: center; }}
-    .part-direct {{ color: #888; font-size: 8pt; font-style: italic; }}
-    .laser-tag {{ color: #1a6fa8; font-size: 8pt; }}
-    .part-body {{ padding: 4px 8px; }}
-
-    .no-steps {{ color: #aaa; font-size: 9pt; font-style: italic; padding: 4px 0; }}
+    .separator {{ border: none; border-top: 1px solid #e8e8e8; margin: 14px 0; }}
+    .no-steps {{ color: #aaa; font-size: 9pt; font-style: italic; }}
   </style>
 </head>
 <body>
-  <h1>Etapele Producției</h1>
-  <p class="subtitle">{subtitle}</p>
+  <div class="doc-header">
+    <div class="doc-title">Etapele Producției</div>
+    <div class="doc-subtitle">{subtitle}</div>
+  </div>
   {content}
   <div class="footer">Generat automat &mdash; SMS Reitler</div>
 </body>
@@ -67,15 +88,14 @@ HTML_TEMPLATE = """
 
 def _render_step(step: dict, index: int) -> str:
     name = step.get("name", "")
-    step_type = step.get("type", "")
     desc = step.get("description", "")
-    type_tag = f'<span class="step-type">{step_type}</span>' if step_type else ""
     desc_html = f'<div class="step-desc">{desc}</div>' if desc else ""
     return f"""
     <div class="step-row">
-      <div class="step-checkbox"></div>
+      <span class="step-checkbox"></span>
+      <span class="step-num">{index}.</span>
       <div class="step-content">
-        <span class="step-name">{index}. {name}</span>{type_tag}
+        <span class="step-name">{name}</span>
         {desc_html}
       </div>
     </div>"""
@@ -84,23 +104,29 @@ def _render_step(step: dict, index: int) -> str:
 def _render_steps(steps: list) -> str:
     if not steps:
         return '<div class="no-steps">—</div>'
-    return "".join(_render_step(s, i + 1) for i, s in enumerate(steps))
+    return f'<div class="steps-list">{"".join(_render_step(s, i + 1) for i, s in enumerate(steps))}</div>'
 
 
 def _build_product_html(product: Product, db: Session) -> str:
     product_steps: list = product.production_steps or product.assembly_steps or []
 
-    # Collect assembly nodes
-    assembly_htmls = []
+    body_parts = []
+
+    # Product-level steps
+    if product_steps:
+        body_parts.append(_render_steps(product_steps))
+
+    # Assembly nodes
     for asm_id in (product.assembly_ids or []):
         asm = db.query(Assembly).filter(Assembly.id == asm_id).first()
         if not asm:
             continue
         asm_steps: list = asm.production_steps or []
-        asm_steps_html = _render_steps(asm_steps)
 
-        # Parts within assembly
-        part_htmls = []
+        asm_inner = []
+        if asm_steps:
+            asm_inner.append(_render_steps(asm_steps))
+
         for ap in (asm.parts or []):
             part_id = ap.get("partId")
             if not part_id:
@@ -111,31 +137,23 @@ def _build_product_html(product: Product, db: Session) -> str:
             part_steps: list = part.production_steps or []
             if not part_steps:
                 continue
-            laser_tag = '<span class="laser-tag">⚡ Laser</span>' if part.requires_laser_cutting else ""
-            part_htmls.append(f"""
-            <div class="part-block">
-              <div class="part-header">Piesă: {part.name}{laser_tag}</div>
-              <div class="part-body">{_render_steps(part_steps)}</div>
+            laser_label = ' <span class="laser-label">⚡ Laser</span>' if part.requires_laser_cutting else ""
+            asm_inner.append(f"""
+            <div class="part-section">
+              <div class="part-title">Piesă: {part.name}{laser_label}</div>
+              {_render_steps(part_steps)}
             </div>""")
 
-        parts_html = "".join(part_htmls)
-        if not asm_steps and not parts_html:
+        if not asm_inner:
             continue
 
-        assembly_htmls.append(f"""
-        <div class="assembly-block">
-          <div class="assembly-header">
-            Ansamblu: {asm.name}
-            <span class="assembly-code">{asm.code}</span>
-          </div>
-          <div class="assembly-body">
-            {asm_steps_html if asm_steps else ""}
-            {parts_html}
-          </div>
+        body_parts.append(f"""
+        <div class="assembly-section">
+          <div class="assembly-title">Ansamblu: {asm.name} <span class="assembly-code-label">{asm.code}</span></div>
+          {"".join(asm_inner)}
         </div>""")
 
     # Direct parts
-    direct_part_htmls = []
     for part_id in (product.part_ids or []):
         part = db.query(Part).filter(Part.id == part_id).first()
         if not part:
@@ -143,32 +161,24 @@ def _build_product_html(product: Product, db: Session) -> str:
         part_steps: list = part.production_steps or []
         if not part_steps:
             continue
-        laser_tag = '<span class="laser-tag">⚡ Laser</span>' if part.requires_laser_cutting else ""
-        direct_part_htmls.append(f"""
-        <div class="part-block">
-          <div class="part-header">
-            Piesă directă: {part.name}{laser_tag}
-            <span class="part-direct"></span>
-          </div>
-          <div class="part-body">{_render_steps(part_steps)}</div>
+        laser_label = ' <span class="laser-label">⚡ Laser</span>' if part.requires_laser_cutting else ""
+        body_parts.append(f"""
+        <div class="part-section">
+          <div class="part-title">Piesă directă: {part.name}{laser_label} <span class="part-direct-label">(direct)</span></div>
+          {_render_steps(part_steps)}
         </div>""")
 
-    assemblies_html = "".join(assembly_htmls)
-    direct_parts_html = "".join(direct_part_htmls)
-    product_steps_html = _render_steps(product_steps) if product_steps else ""
-
-    body = product_steps_html + assemblies_html + direct_parts_html
-    if not body.strip():
+    if not body_parts:
         body = '<div class="no-steps">Nu există pași de producție pentru acest produs.</div>'
+    else:
+        body = "".join(body_parts)
 
     return f"""
     <div class="product-block">
-      <div class="product-header">
-        <span>Produs: {product.name}</span>
-        <span class="code">{product.code}</span>
-      </div>
-      <div class="product-body">{body}</div>
-    </div>"""
+      <div class="product-title">Produs: {product.name} <span class="product-code">{product.code}</span></div>
+      {body}
+    </div>
+    <hr class="separator"/>"""
 
 
 def generate_product_steps_pdf(product: Product, db: Session) -> bytes:

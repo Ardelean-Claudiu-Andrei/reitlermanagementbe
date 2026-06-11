@@ -111,8 +111,15 @@ PAGE_STYLE = """
 @page { size: A4; margin: 12mm; }
 body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; }
 
-/* Two cards per page */
-.card-pair { page-break-after: always; }
+/* Two cards per page — fill full page height, space evenly */
+.card-pair {
+  page-break-after: always;
+  height: 273mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: stretch;
+}
 .card-pair:last-child { page-break-after: avoid; }
 
 /* ── Outer card ── */
@@ -120,7 +127,9 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; }
   border: 2.5px solid #1a1a2e;
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 8mm;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 118mm;
 }
 
 /* ── Top section: icon | details | barcode ── */
@@ -128,7 +137,7 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; }
   display: flex;
   flex-direction: row;
   border-bottom: 2px solid #1a1a2e;
-  min-height: 60mm;
+  flex: 0 0 auto;
 }
 
 /* Left: icon / image */
@@ -277,12 +286,13 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; }
 
 /* ── Bottom: notes / operator confirmation area ── */
 .card-notes {
-  min-height: 42mm;
+  flex: 1;
   padding: 8px 12px;
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
   gap: 0;
+  min-height: 30mm;
 }
 .notes-line {
   border-bottom: 1px solid #ddd;
@@ -351,6 +361,7 @@ def _collect_laser_parts(product: Product, db: Session) -> list[dict]:
     """
     Collect all parts requiring laser cutting, deduplicating by part ID
     and summing quantities across assemblies and direct-part references.
+    Uses product_assemblies/product_parts (qty-aware) if available, else legacy ids.
 
     Each returned dict has:
       entity_id, entity_type, code, name, item_type, quantity, location, barcode_val
@@ -378,14 +389,29 @@ def _collect_laser_parts(product: Product, db: Session) -> list[dict]:
             "barcode_val": barcode_val,
         })
 
-    # Direct parts attached to product
-    for part_id in (product.part_ids or []):
-        part = db.query(Part).filter(Part.id == part_id).first()
-        if part:
-            _add(part, part.required_quantity or 1)
+    # Direct parts: use product_parts with quantity, fallback to part_ids with required_quantity
+    if product.product_parts:
+        for pp in product.product_parts:
+            part_id = pp.get("partId")
+            prod_qty = pp.get("quantity", 1)
+            if not part_id:
+                continue
+            part = db.query(Part).filter(Part.id == part_id).first()
+            if part:
+                _add(part, prod_qty)
+    else:
+        for part_id in (product.part_ids or []):
+            part = db.query(Part).filter(Part.id == part_id).first()
+            if part:
+                _add(part, part.required_quantity or 1)
 
-    # Parts inside each assembly
-    for assembly_id in (product.assembly_ids or []):
+    # Parts inside each assembly: product assembly qty × part qty within assembly
+    if product.product_assemblies:
+        assembly_qty_map = {a["assemblyId"]: a.get("quantity", 1) for a in product.product_assemblies if a.get("assemblyId")}
+    else:
+        assembly_qty_map = {aid: 1 for aid in (product.assembly_ids or [])}
+
+    for assembly_id, asm_qty in assembly_qty_map.items():
         assembly = db.query(Assembly).filter(Assembly.id == assembly_id).first()
         if not assembly:
             continue
@@ -395,7 +421,7 @@ def _collect_laser_parts(product: Product, db: Session) -> list[dict]:
                 continue
             part = db.query(Part).filter(Part.id == part_id).first()
             if part:
-                _add(part, ap.get("quantity", 1))
+                _add(part, ap.get("quantity", 1) * asm_qty)
 
     return laser_items
 

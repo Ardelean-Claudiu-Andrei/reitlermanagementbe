@@ -25,6 +25,7 @@ class ProjectCreate(BaseModel):
     deadline: str = ""
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
+    installationCost: float = 0.0
     items: list = []
     checklist: list = []
     issues: list = []
@@ -41,6 +42,7 @@ class ProjectUpdate(BaseModel):
     deadline: Optional[str] = None
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
+    installationCost: Optional[float] = None
     items: Optional[list] = None
     checklist: Optional[list] = None
     issues: Optional[list] = None
@@ -84,6 +86,7 @@ def project_to_dict(p: Project) -> dict:
         "deadline": p.deadline or "",
         "finishDate": p.finish_date,
         "warrantyExpiration": p.warranty_expiration,
+        "installationCost": p.installation_cost or 0.0,
         "items": p.items or [],
         "checklist": p.checklist or [],
         "issues": p.issues or [],
@@ -132,6 +135,7 @@ def create_project(
         deadline=body.deadline,
         finish_date=body.finishDate,
         warranty_expiration=body.warrantyExpiration,
+        installation_cost=body.installationCost or 0.0,
         items=body.items or [],
         checklist=body.checklist or [],
         issues=body.issues or [],
@@ -171,6 +175,8 @@ def update_project(
         p.finish_date = body.finishDate
     if body.warrantyExpiration is not None:
         p.warranty_expiration = body.warrantyExpiration
+    if body.installationCost is not None:
+        p.installation_cost = body.installationCost
     if body.items is not None:
         p.items = body.items
     if body.checklist is not None:
@@ -374,6 +380,7 @@ def create_project_from_quote(
         status="draft",
         start_date=today.isoformat(),
         deadline=deadline.isoformat(),
+        installation_cost=q.installation or 0.0,
         items=items,
         checklist=[],
         issues=[],
