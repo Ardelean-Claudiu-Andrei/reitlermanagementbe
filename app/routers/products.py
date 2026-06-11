@@ -82,7 +82,7 @@ def list_products(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    products = db.query(Product).filter(Product.is_active != False).order_by(Product.name).all()
+    products = db.query(Product).filter(Product.is_active.isnot(False)).order_by(Product.name).all()
     result = []
     for p in products:
         d = product_to_dict(p)
