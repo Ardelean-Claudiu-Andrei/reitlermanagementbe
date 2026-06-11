@@ -19,8 +19,10 @@ class Product(Base):
     category = Column(String(50), nullable=False, default="other")
     unit = Column(String(50), default="buc")
     base_price = Column(Float, nullable=False, default=0.0)
-    assembly_ids = Column(JSON, default=list)        # list of Assembly IDs
-    part_ids = Column(JSON, default=list)            # list of Part IDs
+    assembly_ids = Column(JSON, default=list)        # list of Assembly IDs (legacy)
+    part_ids = Column(JSON, default=list)            # list of Part IDs (legacy)
+    product_assemblies = Column(JSON, default=list)  # [{assemblyId, quantity}] — new format
+    product_parts = Column(JSON, default=list)       # [{partId, quantity}] — new format
     assembly_steps = Column(JSON, default=list)      # product-level production steps (existing field)
     production_steps = Column(JSON, default=list)    # alias kept separate for forward compat
     notes = Column(Text, default="")

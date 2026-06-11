@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, String, Float, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -22,6 +22,7 @@ class Project(Base):
     deadline = Column(String(50), default="")  # ISO date string
     finish_date = Column(String(50), nullable=True)
     warranty_expiration = Column(String(50), nullable=True)
+    installation_cost = Column(Float, default=0.0)  # from quote, if any
     items = Column(JSON, default=list)  # [{"productId","quantity","unitPrice","notes","fromInventory"}]
     checklist = Column(JSON, default=list)  # [{"id","title","done","note","doneAt"}]
     issues = Column(JSON, default=list)  # [{"id","description","solved","solvedAt","createdAt"}]

@@ -6,7 +6,7 @@ from app.models.part import Part
 from app.models.assembly import Assembly
 from app.models.uploaded_file import UploadedFile
 
-# ─── Image helpers ────────────────────────────────────────────────────────────
+# ─── Constants ────────────────────────────────────────────────────────────────
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 MIME_MAP = {
@@ -15,27 +15,55 @@ MIME_MAP = {
     ".jpeg": "image/jpeg",
     ".webp": "image/webp",
 }
+FILE_LABEL_EXT = {".pdf": "PDF", ".dxf": "DXF", ".dpd": "DPD"}
 UPLOAD_ROOT = "static/uploads"
 EXCLUDED_CATEGORIES = {"welding_drawing", "bending_drawing"}
 
-# Cube placeholder as an inline base64 SVG data URI
-_PLACEHOLDER_SVG = b"""<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <polygon points="50,12 88,32 88,68 50,88 12,68 12,32"
-           fill="#f0f2f5" stroke="#c0c5cc" stroke-width="3"/>
-  <line x1="50" y1="12" x2="50" y2="88" stroke="#d0d5dc" stroke-width="2"/>
-  <line x1="12" y1="32" x2="88" y2="68" stroke="#d0d5dc" stroke-width="2"/>
-  <line x1="88" y1="32" x2="12" y2="68" stroke="#d0d5dc" stroke-width="2"/>
-  <text x="50" y="97" text-anchor="middle" font-size="8"
-        fill="#aab" font-family="Arial">ICON PRODUS</text>
-</svg>"""
+
+# ─── SVG helpers ──────────────────────────────────────────────────────────────
+
+def _make_file_badge_svg(label: str) -> str:
+    """Return an SVG data URI showing a coloured file-type badge (PDF / DXF / DPD)."""
+    color_map = {"PDF": "#dc2626", "DXF": "#2563eb", "DPD": "#7c3aed"}
+    color = color_map.get(label.upper(), "#4b5563")
+    svg = (
+        '<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="10" y="5" width="80" height="110" rx="6"'
+        '      fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>'
+        '<polygon points="60,5 90,5 90,35 60,35"'
+        '         fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1"/>'
+        '<polygon points="60,5 90,35 60,35" fill="#cbd5e1"/>'
+        f'<rect x="10" y="64" width="80" height="34" rx="4" fill="{color}"/>'
+        f'<text x="50" y="87" text-anchor="middle" font-size="20"'
+        f'      font-weight="bold" fill="#fff" font-family="Arial,sans-serif">{label}</text>'
+        '</svg>'
+    ).encode("utf-8")
+    return "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
+
+
+_PLACEHOLDER_SVG = (
+    '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
+    '<polygon points="50,12 88,32 88,68 50,88 12,68 12,32"'
+    '         fill="#f0f2f5" stroke="#c0c5cc" stroke-width="3"/>'
+    '<line x1="50" y1="12" x2="50" y2="88" stroke="#d0d5dc" stroke-width="2"/>'
+    '<line x1="12" y1="32" x2="88" y2="68" stroke="#d0d5dc" stroke-width="2"/>'
+    '<line x1="88" y1="32" x2="12" y2="68" stroke="#d0d5dc" stroke-width="2"/>'
+    '<text x="50" y="97" text-anchor="middle" font-size="8"'
+    '      fill="#aab" font-family="Arial,sans-serif">PIESĂ</text>'
+    '</svg>'
+).encode("utf-8")
 PLACEHOLDER_DATA_URI = "data:image/svg+xml;base64," + base64.b64encode(_PLACEHOLDER_SVG).decode()
 
 
-def _get_entity_image(entity_type: str, entity_id: str, db: Session) -> str:
+def _get_entity_icon(entity_type: str, entity_id: str, db: Session) -> str:
     """
-    Return a data URI for the first image upload for the entity,
-    excluding welding and bending drawing categories.
-    Falls back to the placeholder SVG data URI.
+    Return a data URI for the entity's icon.
+
+    Priority:
+      1. First image upload (png/jpg/jpeg/webp) from main/general uploads
+         (welding_drawing and bending_drawing are always excluded)
+      2. Coloured SVG badge for the first PDF / DXF / DPD upload
+      3. Generic cube placeholder
     """
     files = (
         db.query(UploadedFile)
@@ -46,54 +74,74 @@ def _get_entity_image(entity_type: str, entity_id: str, db: Session) -> str:
         .order_by(UploadedFile.uploaded_at)
         .all()
     )
+
+    first_type_label: str | None = None  # fallback badge label
+
     for f in files:
         if f.file_category in EXCLUDED_CATEGORIES:
             continue
         ext = os.path.splitext(f.original_filename)[1].lower()
-        if ext not in IMAGE_EXTS:
-            continue
-        abs_path = os.path.join(UPLOAD_ROOT, f.stored_path)
-        if not os.path.exists(abs_path):
-            continue
-        try:
-            with open(abs_path, "rb") as fh:
-                raw = fh.read()
-            mime = MIME_MAP.get(ext, "image/png")
-            return f"data:{mime};base64," + base64.b64encode(raw).decode()
-        except OSError:
-            continue
+
+        # Priority 1 – real image
+        if ext in IMAGE_EXTS:
+            abs_path = os.path.join(UPLOAD_ROOT, f.stored_path)
+            if not os.path.exists(abs_path):
+                continue
+            try:
+                with open(abs_path, "rb") as fh:
+                    raw = fh.read()
+                mime = MIME_MAP.get(ext, "image/png")
+                return f"data:{mime};base64," + base64.b64encode(raw).decode()
+            except OSError:
+                continue
+
+        # Priority 2 – remember first known type for badge
+        if first_type_label is None and ext in FILE_LABEL_EXT:
+            first_type_label = FILE_LABEL_EXT[ext]
+
+    if first_type_label:
+        return _make_file_badge_svg(first_type_label)
     return PLACEHOLDER_DATA_URI
 
 
 # ─── CSS page style ───────────────────────────────────────────────────────────
 
 PAGE_STYLE = """
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-@page {{ size: A4; margin: 12mm; }}
-body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; }}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+@page { size: A4; margin: 12mm; }
+body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; }
 
-/* Two cards per page */
-.card-pair {{ page-break-after: always; }}
-.card-pair:last-child {{ page-break-after: avoid; }}
+/* Two cards per page — fill full page height, space evenly */
+.card-pair {
+  page-break-after: always;
+  height: 273mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: stretch;
+}
+.card-pair:last-child { page-break-after: avoid; }
 
 /* ── Outer card ── */
-.card {{
+.card {
   border: 2.5px solid #1a1a2e;
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 8mm;
-}}
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 118mm;
+}
 
 /* ── Top section: icon | details | barcode ── */
-.card-top {{
+.card-top {
   display: flex;
   flex-direction: row;
   border-bottom: 2px solid #1a1a2e;
-  min-height: 60mm;
-}}
+  flex: 0 0 auto;
+}
 
 /* Left: icon / image */
-.card-icon {{
+.card-icon {
   width: 52mm;
   flex-shrink: 0;
   border-right: 1.5px solid #ccc;
@@ -104,49 +152,49 @@ body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; }}
   justify-content: center;
   padding: 8px;
   gap: 5px;
-}}
-.card-icon img {{
+}
+.card-icon img {
   max-width: 44mm;
   max-height: 44mm;
   object-fit: contain;
-}}
-.icon-label {{
+}
+.icon-label {
   font-size: 7pt;
   color: #aaa;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   text-align: center;
-}}
+}
 
 /* Center: name + details box */
-.card-center {{
+.card-center {
   flex: 1;
   padding: 8px 10px;
   border-right: 1.5px solid #ccc;
   display: flex;
   flex-direction: column;
   gap: 5px;
-}}
-.center-top-label {{
+}
+.center-top-label {
   font-size: 7pt;
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}}
-.item-name {{
+}
+.item-name {
   font-size: 13pt;
   font-weight: bold;
   color: #1a1a2e;
   line-height: 1.2;
   margin-bottom: 4px;
-}}
-.details-box {{
+}
+.details-box {
   border: 1.5px solid #1a1a2e;
   border-radius: 3px;
   flex: 1;
   overflow: hidden;
-}}
-.details-header {{
+}
+.details-header {
   background: #1a1a2e;
   color: #fff;
   font-size: 7pt;
@@ -155,30 +203,30 @@ body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; }}
   letter-spacing: 0.5px;
   padding: 3px 8px;
   text-align: center;
-}}
-.detail-row {{
+}
+.detail-row {
   border-bottom: 1px solid #eee;
   padding: 3px 8px;
   font-size: 8.5pt;
   word-break: break-word;
-}}
-.detail-row:last-child {{ border-bottom: none; }}
-.detail-key {{
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-key {
   font-size: 7pt;
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   display: block;
   margin-bottom: 1px;
-}}
-.detail-val {{
+}
+.detail-val {
   font-weight: 600;
   color: #1a1a2e;
   word-break: break-all;
-}}
+}
 
 /* Right: barcode */
-.card-barcode {{
+.card-barcode {
   width: 48mm;
   flex-shrink: 0;
   padding: 8px 6px;
@@ -187,15 +235,15 @@ body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; }}
   align-items: center;
   justify-content: flex-start;
   gap: 4px;
-}}
-.barcode-label {{
+}
+.barcode-label {
   font-size: 7pt;
   color: #888;
   text-transform: uppercase;
   font-weight: bold;
   letter-spacing: 0.5px;
-}}
-.barcode-bars {{
+}
+.barcode-bars {
   width: 38mm;
   height: 24mm;
   border: 1px solid #222;
@@ -216,16 +264,16 @@ body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; }}
     #111 24px, #111 25px,
     #fff 25px, #fff 28px
   );
-}}
-.barcode-code {{
+}
+.barcode-code {
   font-family: monospace;
   font-size: 8pt;
   text-align: center;
   word-break: break-all;
   color: #222;
   max-width: 38mm;
-}}
-.qty-badge {{
+}
+.qty-badge {
   display: inline-block;
   background: #1a1a2e;
   color: #fff;
@@ -234,22 +282,23 @@ body {{ font-family: Arial, sans-serif; font-size: 10pt; color: #111; }}
   padding: 3px 10px;
   border-radius: 3px;
   margin-top: 4px;
-}}
+}
 
 /* ── Bottom: notes / operator confirmation area ── */
-.card-notes {{
-  min-height: 42mm;
+.card-notes {
+  flex: 1;
   padding: 8px 12px;
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
   gap: 0;
-}}
-.notes-line {{
+  min-height: 30mm;
+}
+.notes-line {
   border-bottom: 1px solid #ddd;
   flex: 1;
   min-height: 10mm;
-}}
+}
 """
 
 # ─── HTML templates ───────────────────────────────────────────────────────────
@@ -294,7 +343,7 @@ CARD_HTML = """
     <div class="card-barcode">
       <div class="barcode-label">COD DE BARE</div>
       <div class="barcode-bars"></div>
-      <div class="barcode-code">{code}</div>
+      <div class="barcode-code">{barcode_val}</div>
       <div class="qty-badge">&#215; {quantity}</div>
     </div>
   </div>
@@ -312,9 +361,13 @@ def _collect_laser_parts(product: Product, db: Session) -> list[dict]:
     """
     Collect all parts requiring laser cutting, deduplicating by part ID
     and summing quantities across assemblies and direct-part references.
+    Uses product_assemblies/product_parts (qty-aware) if available, else legacy ids.
+
+    Each returned dict has:
+      entity_id, entity_type, code, name, item_type, quantity, location, barcode_val
     """
     laser_items: list[dict] = []
-    seen: dict[str, int] = {}  # part_id → index in laser_items
+    seen: dict[str, int] = {}  # entity_id → index in laser_items
 
     def _add(part: Part, quantity: int) -> None:
         if not part.requires_laser_cutting:
@@ -323,23 +376,42 @@ def _collect_laser_parts(product: Product, db: Session) -> list[dict]:
             laser_items[seen[part.id]]["quantity"] += quantity
             return
         seen[part.id] = len(laser_items)
+        code = part.code or part.id[:8].upper()
+        barcode_val = part.code or ("LASER-" + part.id[:8].upper())
         laser_items.append({
-            "part_id": part.id,
-            "code": part.code or part.id[:8].upper(),
+            "entity_id": part.id,
+            "entity_type": "part",
+            "code": code,
             "name": part.name,
             "item_type": "Piesă",
             "quantity": quantity,
             "location": part.drawing_location or part.file_location or "",
+            "barcode_val": barcode_val,
         })
 
-    # Direct parts attached to product
-    for part_id in (product.part_ids or []):
-        part = db.query(Part).filter(Part.id == part_id).first()
-        if part:
-            _add(part, part.required_quantity or 1)
+    # Direct parts: use product_parts with quantity, fallback to part_ids with required_quantity
+    if product.product_parts:
+        for pp in product.product_parts:
+            part_id = pp.get("partId")
+            prod_qty = pp.get("quantity", 1)
+            if not part_id:
+                continue
+            part = db.query(Part).filter(Part.id == part_id).first()
+            if part:
+                _add(part, prod_qty)
+    else:
+        for part_id in (product.part_ids or []):
+            part = db.query(Part).filter(Part.id == part_id).first()
+            if part:
+                _add(part, part.required_quantity or 1)
 
-    # Parts inside each assembly
-    for assembly_id in (product.assembly_ids or []):
+    # Parts inside each assembly: product assembly qty × part qty within assembly
+    if product.product_assemblies:
+        assembly_qty_map = {a["assemblyId"]: a.get("quantity", 1) for a in product.product_assemblies if a.get("assemblyId")}
+    else:
+        assembly_qty_map = {aid: 1 for aid in (product.assembly_ids or [])}
+
+    for assembly_id, asm_qty in assembly_qty_map.items():
         assembly = db.query(Assembly).filter(Assembly.id == assembly_id).first()
         if not assembly:
             continue
@@ -349,7 +421,7 @@ def _collect_laser_parts(product: Product, db: Session) -> list[dict]:
                 continue
             part = db.query(Part).filter(Part.id == part_id).first()
             if part:
-                _add(part, ap.get("quantity", 1))
+                _add(part, ap.get("quantity", 1) * asm_qty)
 
     return laser_items
 
@@ -362,17 +434,19 @@ def generate_laser_cutting_pdf(product: Product, db: Session) -> bytes:
     items = _collect_laser_parts(product, db)
 
     if not items:
-        fallback = f"""<!DOCTYPE html><html><body style="font-family:Arial;padding:24px;">
-        <h2>Export Debitare Laser</h2>
-        <p style="color:#888;margin-top:12px;">
-          Nu există piese marcate pentru debitare laser în produsul &quot;{product.name}&quot;.
-        </p></body></html>"""
+        fallback = (
+            '<!DOCTYPE html><html><body style="font-family:Arial;padding:24px;">'
+            '<h2>Export Debitare Laser</h2>'
+            f'<p style="color:#888;margin-top:12px;">Nu există piese marcate pentru debitare laser'
+            f' în produsul &quot;{product.name}&quot;.</p>'
+            '</body></html>'
+        )
         return HTML(string=fallback).write_pdf()
 
     # Build one card per item
     cards: list[str] = []
     for item in items:
-        img_src = _get_entity_image("part", item["part_id"], db)
+        img_src = _get_entity_icon(item["entity_type"], item["entity_id"], db)
         cards.append(CARD_HTML.format(
             img_src=img_src,
             item_type=item["item_type"],
@@ -380,6 +454,7 @@ def generate_laser_cutting_pdf(product: Product, db: Session) -> bytes:
             code=item["code"],
             location=item["location"] or "—",
             quantity=item["quantity"],
+            barcode_val=item["barcode_val"],
         ))
 
     # Pair cards into page groups (2 per A4 page)

@@ -34,24 +34,21 @@ def _box():
 
 
 def _box_name_row():
-    """Top/left/right black + white bottom — white overrides the grey gridline below."""
+    """Top/left/right borders — no bottom, so the description rows below show no separator."""
     b = Side(style="thin", color="000000")
-    w = Side(style="thin", color="FFFFFF")
-    return Border(left=b, right=b, top=b, bottom=w)
+    return Border(left=b, right=b, top=b)
 
 
 def _box_desc_mid():
-    """Left/right black + white top/bottom — white overrides gridlines above and below."""
+    """Left/right borders only — no top/bottom, removes internal lines between description rows."""
     b = Side(style="thin", color="000000")
-    w = Side(style="thin", color="FFFFFF")
-    return Border(left=b, right=b, top=w, bottom=w)
+    return Border(left=b, right=b)
 
 
 def _box_desc_last():
-    """Left/right/bottom black + white top — white overrides the gridline above."""
+    """Left/right/bottom borders — no top, closes the product block at the bottom."""
     b = Side(style="thin", color="000000")
-    w = Side(style="thin", color="FFFFFF")
-    return Border(left=b, right=b, top=w, bottom=b)
+    return Border(left=b, right=b, bottom=b)
 
 
 def _align(h="left", v="center", wrap=False):

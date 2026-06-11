@@ -22,6 +22,8 @@ class ProductCreate(BaseModel):
     basePrice: float = 0.0
     assemblyIds: list = []
     partIds: list = []
+    productAssemblies: list = []  # [{assemblyId, quantity}]
+    productParts: list = []       # [{partId, quantity}]
     assemblySteps: list = []
     productionSteps: list = []
     notes: str = ""
@@ -36,12 +38,26 @@ class ProductUpdate(BaseModel):
     basePrice: Optional[float] = None
     assemblyIds: Optional[list] = None
     partIds: Optional[list] = None
+    productAssemblies: Optional[list] = None  # [{assemblyId, quantity}]
+    productParts: Optional[list] = None       # [{partId, quantity}]
     assemblySteps: Optional[list] = None
     productionSteps: Optional[list] = None
     notes: Optional[str] = None
 
 
 def product_to_dict(p: Product) -> dict:
+    # Derive productAssemblies/productParts, falling back to legacy assemblyIds/partIds with qty=1
+    product_assemblies: list = p.product_assemblies or []
+    product_parts: list = p.product_parts or []
+
+    if not product_assemblies and p.assembly_ids:
+        product_assemblies = [{"assemblyId": aid, "quantity": 1} for aid in p.assembly_ids]
+    if not product_parts and p.part_ids:
+        product_parts = [{"partId": pid, "quantity": 1} for pid in p.part_ids]
+
+    assembly_ids = [a["assemblyId"] for a in product_assemblies if a.get("assemblyId")]
+    part_ids = [pt["partId"] for pt in product_parts if pt.get("partId")]
+
     return {
         "id": p.id,
         "code": p.code,
@@ -50,8 +66,10 @@ def product_to_dict(p: Product) -> dict:
         "category": p.category,
         "unit": p.unit,
         "basePrice": p.base_price,
-        "assemblyIds": p.assembly_ids or [],
-        "partIds": p.part_ids or [],
+        "assemblyIds": assembly_ids,
+        "partIds": part_ids,
+        "productAssemblies": product_assemblies,
+        "productParts": product_parts,
         "assemblySteps": p.assembly_steps or [],
         "productionSteps": p.production_steps or [],
         "notes": p.notes or "",
@@ -60,13 +78,27 @@ def product_to_dict(p: Product) -> dict:
     }
 
 
+def _get_assembly_ids(product: Product) -> list:
+    """Return assembly IDs from new product_assemblies or fall back to legacy assembly_ids."""
+    if product.product_assemblies:
+        return [a["assemblyId"] for a in product.product_assemblies if a.get("assemblyId")]
+    return product.assembly_ids or []
+
+
+def _get_part_ids(product: Product) -> list:
+    """Return part IDs from new product_parts or fall back to legacy part_ids."""
+    if product.product_parts:
+        return [pt["partId"] for pt in product.product_parts if pt.get("partId")]
+    return product.part_ids or []
+
+
 def _has_laser_cutting(product: Product, db: Session) -> bool:
     """Return True if product or any of its parts (direct or via assemblies) require laser cutting."""
-    for part_id in (product.part_ids or []):
+    for part_id in _get_part_ids(product):
         part = db.query(Part).filter(Part.id == part_id).first()
         if part and part.requires_laser_cutting:
             return True
-    for assembly_id in (product.assembly_ids or []):
+    for assembly_id in _get_assembly_ids(product):
         assembly = db.query(Assembly).filter(Assembly.id == assembly_id).first()
         if not assembly:
             continue
@@ -82,7 +114,7 @@ def list_products(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    products = db.query(Product).filter(Product.is_active != False).order_by(Product.name).all()
+    products = db.query(Product).filter(Product.is_active.isnot(False)).order_by(Product.name).all()
     result = []
     for p in products:
         d = product_to_dict(p)
@@ -113,6 +145,12 @@ def create_product(
 ):
     if db.query(Product).filter(Product.code == body.code).first():
         raise HTTPException(status_code=400, detail="Product code already exists")
+    product_assemblies = body.productAssemblies or []
+    product_parts = body.productParts or []
+    # Derive legacy assemblyIds/partIds from new format if provided, else use directly
+    assembly_ids = body.assemblyIds or [a["assemblyId"] for a in product_assemblies if a.get("assemblyId")]
+    part_ids = body.partIds or [pt["partId"] for pt in product_parts if pt.get("partId")]
+
     p = Product(
         code=body.code,
         name=body.name,
@@ -120,8 +158,10 @@ def create_product(
         category=body.category,
         unit=body.unit,
         base_price=body.basePrice,
-        assembly_ids=body.assemblyIds or [],
-        part_ids=body.partIds or [],
+        assembly_ids=assembly_ids,
+        part_ids=part_ids,
+        product_assemblies=product_assemblies,
+        product_parts=product_parts,
         assembly_steps=body.assemblySteps or [],
         production_steps=body.productionSteps or [],
         notes=body.notes,
@@ -154,9 +194,15 @@ def update_product(
         p.unit = body.unit
     if body.basePrice is not None:
         p.base_price = body.basePrice
-    if body.assemblyIds is not None:
+    if body.productAssemblies is not None:
+        p.product_assemblies = body.productAssemblies
+        p.assembly_ids = [a["assemblyId"] for a in body.productAssemblies if a.get("assemblyId")]
+    elif body.assemblyIds is not None:
         p.assembly_ids = body.assemblyIds
-    if body.partIds is not None:
+    if body.productParts is not None:
+        p.product_parts = body.productParts
+        p.part_ids = [pt["partId"] for pt in body.productParts if pt.get("partId")]
+    elif body.partIds is not None:
         p.part_ids = body.partIds
     if body.assemblySteps is not None:
         p.assembly_steps = body.assemblySteps
