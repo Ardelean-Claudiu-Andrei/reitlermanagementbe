@@ -17,6 +17,7 @@ class ClientCreate(BaseModel):
     phone: str = ""
     address: str = ""
     cui: str = ""
+    details: str = ""
 
 
 class ClientUpdate(BaseModel):
@@ -26,6 +27,7 @@ class ClientUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     cui: Optional[str] = None
+    details: Optional[str] = None
 
 
 def client_to_dict(c: Client) -> dict:
@@ -37,6 +39,7 @@ def client_to_dict(c: Client) -> dict:
         "phone": c.phone or "",
         "address": c.address or "",
         "cui": c.cui or "",
+        "details": c.details or "",
         "createdAt": c.created_at.isoformat() if c.created_at else None,
         "updatedAt": c.updated_at.isoformat() if c.updated_at else None,
     }
@@ -76,6 +79,7 @@ def create_client(
         phone=body.phone,
         address=body.address,
         cui=body.cui,
+        details=body.details,
     )
     db.add(c)
     db.commit()
@@ -105,6 +109,8 @@ def update_client(
         c.address = body.address
     if body.cui is not None:
         c.cui = body.cui
+    if body.details is not None:
+        c.details = body.details
     db.commit()
     db.refresh(c)
     return client_to_dict(c)

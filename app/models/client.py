@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -19,6 +19,7 @@ class Client(Base):
     phone = Column(String(50), default="")
     address = Column(String(500), default="")
     cui = Column(String(50), default="")
+    details = Column(Text, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
