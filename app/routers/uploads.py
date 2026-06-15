@@ -11,7 +11,7 @@ from app.models.uploaded_file import UploadedFile
 router = APIRouter()
 
 ALLOWED_ENTITY_TYPES = {"assembly", "part", "product"}
-ALLOWED_FILE_CATEGORIES = {"dxf", "dpd", "pdf", "welding_drawing", "bending_drawing"}
+ALLOWED_FILE_CATEGORIES = {"dxf", "pdf", "image", "welding_drawing", "bending_drawing"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 UPLOAD_ROOT = "static/uploads"
 

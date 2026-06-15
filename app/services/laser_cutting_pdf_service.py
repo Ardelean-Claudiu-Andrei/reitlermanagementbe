@@ -15,7 +15,7 @@ MIME_MAP = {
     ".jpeg": "image/jpeg",
     ".webp": "image/webp",
 }
-FILE_LABEL_EXT = {".pdf": "PDF", ".dxf": "DXF", ".dpd": "DPD"}
+FILE_LABEL_EXT = {".pdf": "PDF", ".dxf": "DXF"}
 UPLOAD_ROOT = "static/uploads"
 EXCLUDED_CATEGORIES = {"welding_drawing", "bending_drawing"}
 
@@ -23,8 +23,8 @@ EXCLUDED_CATEGORIES = {"welding_drawing", "bending_drawing"}
 # ─── SVG helpers ──────────────────────────────────────────────────────────────
 
 def _make_file_badge_svg(label: str) -> str:
-    """Return an SVG data URI showing a coloured file-type badge (PDF / DXF / DPD)."""
-    color_map = {"PDF": "#dc2626", "DXF": "#2563eb", "DPD": "#7c3aed"}
+    """Return an SVG data URI showing a coloured file-type badge (PDF / DXF)."""
+    color_map = {"PDF": "#dc2626", "DXF": "#2563eb"}
     color = color_map.get(label.upper(), "#4b5563")
     svg = (
         '<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'
@@ -62,7 +62,7 @@ def _get_entity_icon(entity_type: str, entity_id: str, db: Session) -> str:
     Priority:
       1. First image upload (png/jpg/jpeg/webp) from main/general uploads
          (welding_drawing and bending_drawing are always excluded)
-      2. Coloured SVG badge for the first PDF / DXF / DPD upload
+      2. Coloured SVG badge for the first PDF / DXF upload
       3. Generic cube placeholder
     """
     files = (
