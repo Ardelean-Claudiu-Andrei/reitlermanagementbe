@@ -31,6 +31,8 @@ class ProjectCreate(BaseModel):
     checklist: list = []
     issues: list = []
     activity: list = []
+    stepsCompleted: list = []
+    stepsTotal: int = 0
 
 
 class ProjectUpdate(BaseModel):
@@ -49,6 +51,8 @@ class ProjectUpdate(BaseModel):
     checklist: Optional[list] = None
     issues: Optional[list] = None
     activity: Optional[list] = None
+    stepsCompleted: Optional[list] = None
+    stepsTotal: Optional[int] = None
 
 
 class StatusUpdate(BaseModel):
@@ -94,6 +98,8 @@ def project_to_dict(p: Project) -> dict:
         "checklist": p.checklist or [],
         "issues": p.issues or [],
         "activity": p.activity or [],
+        "stepsCompleted": p.steps_completed or [],
+        "stepsTotal": p.steps_total or 0,
         "createdAt": p.created_at.isoformat() if p.created_at else None,
         "updatedAt": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -144,6 +150,8 @@ def create_project(
         checklist=body.checklist or [],
         issues=body.issues or [],
         activity=body.activity or [],
+        steps_completed=body.stepsCompleted or [],
+        steps_total=body.stepsTotal or 0,
     )
     db.add(p)
     db.commit()
@@ -191,6 +199,11 @@ def update_project(
         p.issues = body.issues
     if body.activity is not None:
         p.activity = body.activity
+    if body.stepsCompleted is not None:
+        p.steps_completed = body.stepsCompleted
+        flag_modified(p, "steps_completed")
+    if body.stepsTotal is not None:
+        p.steps_total = body.stepsTotal
     db.commit()
     db.refresh(p)
     return project_to_dict(p)

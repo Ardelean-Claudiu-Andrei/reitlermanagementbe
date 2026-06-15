@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Float, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, String, Float, DateTime, Text, JSON, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -28,6 +28,8 @@ class Project(Base):
     checklist = Column(JSON, default=list)  # [{"id","title","done","note","doneAt"}]
     issues = Column(JSON, default=list)  # [{"id","description","solved","solvedAt","createdAt"}]
     activity = Column(JSON, default=list)  # [{"id","action","user","timestamp"}]
+    steps_completed = Column(JSON, default=list)  # [stepId, ...] — per-project production step completion
+    steps_total = Column(Integer, default=0)      # cached total step count for quick progress in list view
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
