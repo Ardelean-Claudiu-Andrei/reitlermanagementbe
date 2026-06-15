@@ -50,6 +50,61 @@ def _make_file_badge(label: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
 
 
+def _render_dxf_preview(abs_path: str) -> str | None:
+    try:
+        import ezdxf
+        doc = ezdxf.readfile(abs_path)
+        msp = doc.modelspace()
+    except Exception:
+        return None
+
+    try:
+        from ezdxf.addons.drawing import RenderContext, Frontend, layout
+        from ezdxf.addons.drawing.svg import SVGBackend
+        from ezdxf.addons.drawing.properties import LayoutProperties
+
+        ctx = RenderContext(doc)
+        lp = LayoutProperties.from_layout(msp)
+        lp.set_colors("#ffffff", "#000000")  # white background, black lines
+
+        backend = SVGBackend()
+        Frontend(ctx, backend).draw_layout(msp, layout_properties=lp)
+        page = layout.Page(width=80, height=80, units=layout.Units.mm)
+        svg = backend.get_string(page)
+        if svg:
+            return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+    except Exception:
+        pass
+
+    try:
+        import io
+        from ezdxf.addons.drawing import RenderContext, Frontend
+        from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        fig = plt.figure(figsize=(3, 3), dpi=96)
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_aspect("equal")
+        backend = MatplotlibBackend(ax)
+        Frontend(RenderContext(doc), backend).draw_layout(msp)
+        ax.set_axis_off()
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=96, bbox_inches="tight",
+                    facecolor="white", edgecolor="none", pad_inches=0.1)
+        plt.close(fig)
+        buf.seek(0)
+        raw = buf.read()
+        if raw:
+            return "data:image/png;base64," + base64.b64encode(raw).decode()
+    except Exception:
+        pass
+
+    return None
+
+
 def _icon(entity_type: str, entity_id: str, db: Session) -> str:
     files = (
         db.query(UploadedFile)
@@ -58,6 +113,8 @@ def _icon(entity_type: str, entity_id: str, db: Session) -> str:
         .all()
     )
     fallback_label = None
+    first_dxf_path: str | None = None
+
     for f in files:
         if f.file_category in _EXCLUDED_CATS:
             continue
@@ -70,8 +127,18 @@ def _icon(entity_type: str, entity_id: str, db: Session) -> str:
                     return f"data:{_MIME_MAP.get(ext, 'image/png')};base64," + base64.b64encode(raw).decode()
                 except OSError:
                     pass
+        if ext == ".dxf" and first_dxf_path is None:
+            path = os.path.join(_UPLOAD_ROOT, f.stored_path)
+            if os.path.exists(path):
+                first_dxf_path = path
         if fallback_label is None and ext in _FILE_LABEL_EXT:
             fallback_label = _FILE_LABEL_EXT[ext]
+
+    if first_dxf_path:
+        preview = _render_dxf_preview(first_dxf_path)
+        if preview:
+            return preview
+
     return _make_file_badge(fallback_label) if fallback_label else _PLACEHOLDER_URI
 
 
