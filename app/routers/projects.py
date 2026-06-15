@@ -437,6 +437,27 @@ def export_project_production_steps_pdf(
     )
 
 
+@router.get("/{project_id}/export-production-cards")
+def export_project_production_cards_pdf(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.production_cards_pdf_service import generate_production_cards_pdf
+    pdf_bytes = generate_production_cards_pdf(p, db)
+
+    filename = f"fise-productie-{p.code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(
     project_id: str,

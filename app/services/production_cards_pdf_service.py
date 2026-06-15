@@ -1,0 +1,394 @@
+"""
+Production cards PDF service.
+
+Generates one card per entity in the project hierarchy:
+  Product → Assemblies (each with their Parts) → direct Parts of the Product.
+
+Each card: icon | name / project ref / barcode | steps with checkboxes | notes.
+2 cards per A4 page, black-and-white, print-friendly.
+"""
+
+import os
+import base64
+from sqlalchemy.orm import Session
+from app.models.product import Product
+from app.models.assembly import Assembly
+from app.models.part import Part
+from app.models.uploaded_file import UploadedFile
+
+# ─── Icon helpers ─────────────────────────────────────────────────────────────
+
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+_MIME_MAP = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+_FILE_LABEL_EXT = {".pdf": "PDF", ".dxf": "DXF"}
+_UPLOAD_ROOT = "static/uploads"
+_EXCLUDED_CATS = {"welding_drawing", "bending_drawing"}
+
+_PLACEHOLDER_SVG = (
+    '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
+    '<rect x="5" y="5" width="90" height="90" rx="6" fill="#f5f5f5" stroke="#bbb" stroke-width="2"/>'
+    '<line x1="15" y1="15" x2="85" y2="85" stroke="#ddd" stroke-width="2"/>'
+    '<line x1="85" y1="15" x2="15" y2="85" stroke="#ddd" stroke-width="2"/>'
+    '<rect x="30" y="30" width="40" height="40" rx="3" fill="none" stroke="#ccc" stroke-width="2"/>'
+    '</svg>'
+).encode()
+_PLACEHOLDER_URI = "data:image/svg+xml;base64," + base64.b64encode(_PLACEHOLDER_SVG).decode()
+
+
+def _make_file_badge(label: str) -> str:
+    color = {"PDF": "#dc2626", "DXF": "#2563eb"}.get(label.upper(), "#555")
+    svg = (
+        '<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="10" y="5" width="80" height="110" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>'
+        '<polygon points="60,5 90,5 90,35 60,35" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1"/>'
+        '<polygon points="60,5 90,35 60,35" fill="#cbd5e1"/>'
+        f'<rect x="10" y="64" width="80" height="34" rx="4" fill="{color}"/>'
+        f'<text x="50" y="87" text-anchor="middle" font-size="20" font-weight="bold"'
+        f'      fill="#fff" font-family="Arial,sans-serif">{label}</text>'
+        '</svg>'
+    ).encode()
+    return "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
+
+
+def _icon(entity_type: str, entity_id: str, db: Session) -> str:
+    files = (
+        db.query(UploadedFile)
+        .filter(UploadedFile.entity_type == entity_type, UploadedFile.entity_id == entity_id)
+        .order_by(UploadedFile.uploaded_at)
+        .all()
+    )
+    fallback_label = None
+    for f in files:
+        if f.file_category in _EXCLUDED_CATS:
+            continue
+        ext = os.path.splitext(f.original_filename)[1].lower()
+        if ext in _IMAGE_EXTS:
+            path = os.path.join(_UPLOAD_ROOT, f.stored_path)
+            if os.path.exists(path):
+                try:
+                    raw = open(path, "rb").read()
+                    return f"data:{_MIME_MAP.get(ext, 'image/png')};base64," + base64.b64encode(raw).decode()
+                except OSError:
+                    pass
+        if fallback_label is None and ext in _FILE_LABEL_EXT:
+            fallback_label = _FILE_LABEL_EXT[ext]
+    return _make_file_badge(fallback_label) if fallback_label else _PLACEHOLDER_URI
+
+
+# ─── CSS ──────────────────────────────────────────────────────────────────────
+
+_CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+@page { size: A4; margin: 10mm; }
+body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background: #fff; }
+
+.card-pair {
+  page-break-after: always;
+  height: 277mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+.card-pair:last-child { page-break-after: avoid; }
+
+/* ── Card shell ── */
+.card {
+  border: 2px solid #000;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 132mm;
+  overflow: hidden;
+}
+
+/* ── Header row: icon | info ── */
+.card-top {
+  display: flex;
+  flex-direction: row;
+  border-bottom: 2px solid #000;
+  min-height: 45mm;
+}
+
+.card-icon {
+  width: 48mm;
+  flex-shrink: 0;
+  border-right: 1.5px solid #999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: #fff;
+}
+.card-icon img {
+  max-width: 42mm;
+  max-height: 40mm;
+  object-fit: contain;
+}
+
+.card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.info-type {
+  font-size: 6.5pt;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 4px 8px 0;
+}
+.info-name {
+  font-size: 15pt;
+  font-weight: bold;
+  line-height: 1.15;
+  padding: 2px 8px 4px;
+  border-bottom: 1px solid #ccc;
+}
+.info-project {
+  font-size: 8pt;
+  padding: 3px 8px;
+  border-bottom: 1px solid #ccc;
+  color: #333;
+}
+.info-project strong { font-weight: 700; color: #000; }
+.info-barcode {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 4px 8px 5px;
+  gap: 2px;
+}
+.barcode-lbl {
+  font-size: 6.5pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+}
+.barcode-bars {
+  width: 60mm;
+  height: 14mm;
+  border: 1px solid #222;
+  background: repeating-linear-gradient(
+    90deg,
+    #000 0px,  #000 2px,  #fff 2px,  #fff 4px,
+    #000 4px,  #000 5px,  #fff 5px,  #fff 8px,
+    #000 8px,  #000 9px,  #fff 9px,  #fff 12px,
+    #000 12px, #000 14px, #fff 14px, #fff 15px,
+    #000 15px, #000 16px, #fff 16px, #fff 20px,
+    #000 20px, #000 22px, #fff 22px, #fff 24px,
+    #000 24px, #000 25px, #fff 25px, #fff 28px
+  );
+}
+.barcode-val {
+  font-family: monospace;
+  font-size: 7.5pt;
+  color: #222;
+  letter-spacing: 0.5px;
+}
+
+/* ── Steps ── */
+.card-steps {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1.5px solid #000;
+  min-height: 0;
+}
+.section-header {
+  font-size: 6.5pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #fff;
+  background: #000;
+  padding: 3px 10px;
+}
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px;
+  border-bottom: 1px solid #eee;
+  min-height: 7.5mm;
+}
+.step-row:last-child { border-bottom: none; }
+.step-cb {
+  width: 11px; height: 11px;
+  border: 1.5px solid #000;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.step-num {
+  font-size: 7.5pt; color: #999;
+  flex-shrink: 0; min-width: 16px;
+  font-family: monospace;
+}
+.step-name { font-size: 9pt; font-weight: 600; flex: 1; }
+.step-type {
+  font-size: 6.5pt; color: #666;
+  background: #f0f0f0;
+  border-radius: 2px;
+  padding: 1px 4px;
+  flex-shrink: 0;
+}
+.no-steps {
+  padding: 6px 10px;
+  font-size: 8pt;
+  color: #bbb;
+  font-style: italic;
+}
+
+/* ── Notes ── */
+.card-notes {
+  flex-shrink: 0;
+  min-height: 16mm;
+}
+.notes-body {
+  height: 12mm;
+}
+"""
+
+_HTML_WRAPPER = """<!DOCTYPE html>
+<html lang="ro">
+<head><meta charset="UTF-8"/><style>{css}</style></head>
+<body>{pairs}</body>
+</html>"""
+
+
+# ─── Card builder ─────────────────────────────────────────────────────────────
+
+def _steps_rows(steps: list) -> str:
+    if not steps:
+        return '<div class="no-steps">— Nicio etapă de producție —</div>'
+    html = ""
+    for i, s in enumerate(steps):
+        name = s.get("name", "")
+        desc = s.get("description", "")
+        stype = s.get("type", "")
+        display = name + (f' <span style="font-size:8pt;color:#777;font-weight:normal;">— {desc}</span>' if desc else "")
+        type_badge = f'<span class="step-type">{stype}</span>' if stype else ""
+        html += (
+            f'<div class="step-row">'
+            f'<span class="step-cb"></span>'
+            f'<span class="step-num">{i+1}.</span>'
+            f'<span class="step-name">{display}</span>'
+            f'{type_badge}'
+            f'</div>'
+        )
+    return html
+
+
+def _card(entity_type: str, entity_id: str, name: str, code: str,
+          type_label: str, steps: list, proj_code: str, proj_name: str,
+          db: Session) -> str:
+    img = _icon(entity_type, entity_id, db)
+    barcode_val = code or entity_id[:14].upper()
+    return f"""
+<div class="card">
+  <div class="card-top">
+    <div class="card-icon"><img src="{img}" alt=""/></div>
+    <div class="card-info">
+      <div class="info-type">{type_label}</div>
+      <div class="info-name">{name}</div>
+      <div class="info-project">Proiect: <strong>{proj_code}</strong> — {proj_name}</div>
+      <div class="info-barcode">
+        <div class="barcode-lbl">Cod de bare</div>
+        <div class="barcode-bars"></div>
+        <div class="barcode-val">{barcode_val}</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-steps">
+    <div class="section-header">Pași de producție</div>
+    {_steps_rows(steps)}
+  </div>
+  <div class="card-notes">
+    <div class="section-header">Note</div>
+    <div class="notes-body"></div>
+  </div>
+</div>"""
+
+
+# ─── Hierarchy traversal ──────────────────────────────────────────────────────
+
+def _collect_cards(project, db: Session) -> list[str]:
+    cards: list[str] = []
+    proj_code = project.code or ""
+    proj_name = project.name or ""
+
+    for item in (project.items or []):
+        product_id = item.get("productId")
+        if not product_id:
+            continue
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            continue
+
+        # Product card
+        prod_steps = product.production_steps or product.assembly_steps or []
+        cards.append(_card("product", product.id, product.name, product.code,
+                           "Produs", prod_steps, proj_code, proj_name, db))
+
+        # Assembly cards + their part cards
+        if product.product_assemblies:
+            asm_ids = [a["assemblyId"] for a in product.product_assemblies if a.get("assemblyId")]
+        else:
+            asm_ids = product.assembly_ids or []
+
+        for asm_id in asm_ids:
+            asm = db.query(Assembly).filter(Assembly.id == asm_id).first()
+            if not asm:
+                continue
+            cards.append(_card("assembly", asm.id, asm.name, asm.code,
+                               "Ansamblu", asm.production_steps or [], proj_code, proj_name, db))
+
+            for ap in (asm.parts or []):
+                pid = ap.get("partId")
+                if not pid:
+                    continue
+                part = db.query(Part).filter(Part.id == pid).first()
+                if not part:
+                    continue
+                cards.append(_card("part", part.id, part.name, part.code or "",
+                                   "Piesă", part.production_steps or [], proj_code, proj_name, db))
+
+        # Direct part cards
+        if product.product_parts:
+            direct_ids = [p["partId"] for p in product.product_parts if p.get("partId")]
+        else:
+            direct_ids = product.part_ids or []
+
+        for pid in direct_ids:
+            part = db.query(Part).filter(Part.id == pid).first()
+            if not part:
+                continue
+            cards.append(_card("part", part.id, part.name, part.code or "",
+                               "Piesă directă", part.production_steps or [], proj_code, proj_name, db))
+
+    return cards
+
+
+# ─── Public entry point ───────────────────────────────────────────────────────
+
+def generate_production_cards_pdf(project, db: Session) -> bytes:
+    from weasyprint import HTML
+
+    cards = _collect_cards(project, db)
+
+    if not cards:
+        return HTML(string=(
+            '<!DOCTYPE html><html><body style="font-family:Arial;padding:24px;">'
+            '<h2>Fișe de producție</h2>'
+            f'<p style="color:#888;margin-top:12px;">Niciun produs / ansamblu / piesă în proiectul &quot;{project.name}&quot;.</p>'
+            '</body></html>'
+        )).write_pdf()
+
+    pairs = []
+    for i in range(0, len(cards), 2):
+        c1 = cards[i]
+        c2 = cards[i + 1] if i + 1 < len(cards) else ""
+        pairs.append(f'<div class="card-pair">{c1}{c2}</div>')
+
+    return HTML(string=_HTML_WRAPPER.format(css=_CSS, pairs="".join(pairs))).write_pdf()
