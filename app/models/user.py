@@ -11,7 +11,9 @@ def generate_uuid():
 
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
-    USER = "USER"
+    USER = "USER"          # legacy – kept for backward-compat
+    ENGINEER = "ENGINEER"
+    PRODUCTION = "PRODUCTION"
 
 
 class User(Base):

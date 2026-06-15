@@ -9,6 +9,14 @@ from app.models.user import User, UserRole
 router = APIRouter()
 
 
+_ROLE_MAP = {
+    UserRole.ADMIN: "admin",
+    UserRole.ENGINEER: "engineer",
+    UserRole.PRODUCTION: "production",
+    UserRole.USER: "employee",  # legacy
+}
+
+
 def user_info(u: User) -> dict:
     first = u.first_name or ""
     last = u.last_name or ""
@@ -18,7 +26,7 @@ def user_info(u: User) -> dict:
         "lastName": last,
         "name": f"{first} {last}".strip() or u.name,
         "email": u.email,
-        "role": "admin" if u.role == UserRole.ADMIN else "employee",
+        "role": _ROLE_MAP.get(u.role, "employee"),
     }
 
 
