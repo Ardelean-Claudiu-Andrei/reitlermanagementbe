@@ -26,6 +26,7 @@ class ProjectCreate(BaseModel):
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
     installationCost: float = 0.0
+    paidAmount: float = 0.0
     items: list = []
     checklist: list = []
     issues: list = []
@@ -43,6 +44,7 @@ class ProjectUpdate(BaseModel):
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
     installationCost: Optional[float] = None
+    paidAmount: Optional[float] = None
     items: Optional[list] = None
     checklist: Optional[list] = None
     issues: Optional[list] = None
@@ -87,6 +89,7 @@ def project_to_dict(p: Project) -> dict:
         "finishDate": p.finish_date,
         "warrantyExpiration": p.warranty_expiration,
         "installationCost": p.installation_cost or 0.0,
+        "paidAmount": p.paid_amount or 0.0,
         "items": p.items or [],
         "checklist": p.checklist or [],
         "issues": p.issues or [],
@@ -136,6 +139,7 @@ def create_project(
         finish_date=body.finishDate,
         warranty_expiration=body.warrantyExpiration,
         installation_cost=body.installationCost or 0.0,
+        paid_amount=body.paidAmount or 0.0,
         items=body.items or [],
         checklist=body.checklist or [],
         issues=body.issues or [],
@@ -177,6 +181,8 @@ def update_project(
         p.warranty_expiration = body.warrantyExpiration
     if body.installationCost is not None:
         p.installation_cost = body.installationCost
+    if body.paidAmount is not None:
+        p.paid_amount = body.paidAmount
     if body.items is not None:
         p.items = body.items
     if body.checklist is not None:
