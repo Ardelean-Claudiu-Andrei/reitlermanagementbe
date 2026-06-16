@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.routers import (
     auth, users, products, categories, clients,
-    offers, stats, parts, assemblies, quotes, projects, inventory, uploads
+    offers, stats, parts, assemblies, quotes, projects, inventory, uploads, reports
 )
 from app.routers import settings as settings_router
 
@@ -39,6 +39,7 @@ app.include_router(offers.router,      prefix="/api/offers",      tags=["Offers"
 app.include_router(stats.router,       prefix="/api/stats",       tags=["Stats"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(uploads.router,     prefix="/api/uploads",     tags=["Uploads"])
+app.include_router(reports.router,     prefix="/api/reports",     tags=["Reports"])
 
 
 @app.get("/health")
