@@ -193,8 +193,8 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background:
 
 .card-info {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  padding-bottom: 24mm;
   overflow: hidden;
 }
 .info-type {
@@ -219,12 +219,11 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background:
 }
 .info-project strong { font-weight: 700; color: #000; }
 .info-barcode {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   padding: 4px 8px 5px;
-  gap: 2px;
 }
 .barcode-lbl {
   font-size: 6.5pt;
@@ -232,10 +231,12 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background:
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #888;
+  margin-bottom: 2px;
 }
 .barcode-bars {
   width: 60mm;
   height: 14mm;
+  margin-bottom: 2px;
   border: 1px solid #222;
   background: repeating-linear-gradient(
     90deg,
