@@ -307,6 +307,30 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background:
   font-style: italic;
 }
 
+/* ── Product composition summary (assemblies / direct parts) ── */
+.comp-header {
+  font-size: 6.5pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #555;
+  background: #f0f0f0;
+  padding: 3px 10px;
+  border-top: 1px solid #ccc;
+}
+.comp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-bottom: 1px solid #eee;
+  min-height: 6.5mm;
+}
+.comp-row:last-child { border-bottom: none; }
+.comp-bullet { color: #888; font-size: 9pt; flex-shrink: 0; }
+.comp-type { font-size: 7pt; color: #666; font-weight: 600; flex-shrink: 0; }
+.comp-name { font-size: 9pt; font-weight: 600; flex: 1; }
+
 /* ── Notes ── */
 .card-notes {
   flex-shrink: 0;
@@ -324,20 +348,49 @@ _HTML_WRAPPER = """<!DOCTYPE html>
 </html>"""
 
 
+# ─── Barcode payload helpers ──────────────────────────────────────────────────
+# The barcode is currently a decorative CSS pattern (no real encoder). These
+# helpers build the structured payload that a real barcode/QR generator would
+# encode later, so scanning can resolve project/entity/step without redesign.
+
+def build_project_item_barcode_payload(project_id: str, entity_type: str, entity_id: str, code: str) -> str:
+    """PROJECT_ITEM|projectId=...|entityType=...|entityId=...|code=..."""
+    return (
+        f"PROJECT_ITEM|projectId={project_id}|entityType={entity_type}"
+        f"|entityId={entity_id}|code={code or ''}"
+    )
+
+
+def build_project_step_barcode_payload(project_id: str, entity_type: str, entity_id: str, step_id: str) -> str:
+    """
+    PROJECT_STEP|projectId=...|entityType=...|entityId=...|stepId=...
+    Only call this when step_id is a real persisted AssemblyStep.id — never invent one.
+    """
+    return (
+        f"PROJECT_STEP|projectId={project_id}|entityType={entity_type}"
+        f"|entityId={entity_id}|stepId={step_id}"
+    )
+
+
 # ─── Card builder ─────────────────────────────────────────────────────────────
 
-def _steps_rows(steps: list) -> str:
+def _steps_rows(steps: list, project_id: str, entity_type: str, entity_id: str) -> str:
     if not steps:
-        return '<div class="no-steps">— Nicio etapă de producție —</div>'
+        return ""
     html = ""
     for i, s in enumerate(steps):
+        step_id = s.get("id")
         name = s.get("name", "")
         desc = s.get("description", "")
         stype = s.get("type", "")
         display = name + (f' <span style="font-size:8pt;color:#777;font-weight:normal;">— {desc}</span>' if desc else "")
         type_badge = f'<span class="step-type">{stype}</span>' if stype else ""
+        step_payload_attr = ""
+        if step_id:
+            payload = build_project_step_barcode_payload(project_id, entity_type, entity_id, step_id)
+            step_payload_attr = f' data-step-payload="{payload}"'
         html += (
-            f'<div class="step-row">'
+            f'<div class="step-row"{step_payload_attr}>'
             f'<span class="step-cb"></span>'
             f'<span class="step-num">{i+1}.</span>'
             f'<span class="step-name">{display}</span>'
@@ -347,11 +400,38 @@ def _steps_rows(steps: list) -> str:
     return html
 
 
+def _composition_rows(items: list[dict]) -> str:
+    """Summarizes the assemblies / direct parts a Product card is made of."""
+    if not items:
+        return ""
+    rows = "".join(
+        f'<div class="comp-row">'
+        f'<span class="comp-bullet">&#8226;</span>'
+        f'<span class="comp-type">{it["type_label"]}:</span>'
+        f'<span class="comp-name">{it["name"]}</span>'
+        f'</div>'
+        for it in items
+    )
+    return f'<div class="comp-header">Compoziție produs</div>{rows}'
+
+
 def _card(entity_type: str, entity_id: str, name: str, code: str,
           type_label: str, steps: list, proj_code: str, proj_name: str,
-          db: Session) -> str:
+          db: Session, project_id: str, composition: list[dict] | None = None) -> str:
     img = _icon(entity_type, entity_id, db)
-    barcode_val = code or entity_id[:14].upper()
+    barcode_display = code or entity_id[:14].upper()
+    payload = build_project_item_barcode_payload(project_id, entity_type, entity_id, code)
+
+    sections = []
+    steps_html = _steps_rows(steps, project_id, entity_type, entity_id)
+    if steps_html:
+        sections.append(steps_html)
+    if composition:
+        sections.append(_composition_rows(composition))
+    if not sections:
+        sections.append('<div class="no-steps">— Nicio etapă de producție —</div>')
+    content_html = "".join(sections)
+
     return f"""
 <div class="card">
   <div class="card-top">
@@ -362,14 +442,14 @@ def _card(entity_type: str, entity_id: str, name: str, code: str,
       <div class="info-project">Proiect: <strong>{proj_code}</strong> — {proj_name}</div>
       <div class="info-barcode">
         <div class="barcode-lbl">Cod de bare</div>
-        <div class="barcode-bars"></div>
-        <div class="barcode-val">{barcode_val}</div>
+        <div class="barcode-bars" data-payload="{payload}"></div>
+        <div class="barcode-val">{barcode_display}</div>
       </div>
     </div>
   </div>
   <div class="card-steps">
     <div class="section-header">Pași de producție</div>
-    {_steps_rows(steps)}
+    {content_html}
   </div>
   <div class="card-notes">
     <div class="section-header">Note</div>
@@ -384,6 +464,7 @@ def _collect_cards(project, db: Session) -> list[str]:
     cards: list[str] = []
     proj_code = project.code or ""
     proj_name = project.name or ""
+    project_id = project.id
 
     for item in (project.items or []):
         product_id = item.get("productId")
@@ -393,23 +474,43 @@ def _collect_cards(project, db: Session) -> list[str]:
         if not product:
             continue
 
-        # Product card
-        prod_steps = product.production_steps or product.assembly_steps or []
-        cards.append(_card("product", product.id, product.name, product.code,
-                           "Produs", prod_steps, proj_code, proj_name, db))
-
-        # Assembly cards + their part cards
+        # Resolve assemblies for this product up front — reused for both the
+        # product card's composition summary and the assembly cards below.
         if product.product_assemblies:
             asm_ids = [a["assemblyId"] for a in product.product_assemblies if a.get("assemblyId")]
         else:
             asm_ids = product.assembly_ids or []
+        assemblies_by_id = {
+            a.id: a for a in (db.query(Assembly).filter(Assembly.id.in_(asm_ids)).all() if asm_ids else [])
+        }
+        ordered_assemblies = [assemblies_by_id[aid] for aid in asm_ids if aid in assemblies_by_id]
 
-        for asm_id in asm_ids:
-            asm = db.query(Assembly).filter(Assembly.id == asm_id).first()
-            if not asm:
-                continue
+        # Resolve direct parts for this product up front — same reuse as above.
+        if product.product_parts:
+            direct_ids = [p["partId"] for p in product.product_parts if p.get("partId")]
+        else:
+            direct_ids = product.part_ids or []
+        direct_parts_by_id = {
+            p.id: p for p in (db.query(Part).filter(Part.id.in_(direct_ids)).all() if direct_ids else [])
+        }
+        ordered_direct_parts = [direct_parts_by_id[pid] for pid in direct_ids if pid in direct_parts_by_id]
+
+        composition = (
+            [{"type_label": "Ansamblu", "name": a.name} for a in ordered_assemblies]
+            + [{"type_label": "Piesă directă", "name": p.name} for p in ordered_direct_parts]
+        )
+
+        # Product card — summarizes what it's made of so it's never empty
+        prod_steps = product.production_steps or product.assembly_steps or []
+        cards.append(_card("product", product.id, product.name, product.code,
+                           "Produs", prod_steps, proj_code, proj_name, db,
+                           project_id=project_id, composition=composition))
+
+        # Assembly cards + their part cards
+        for asm in ordered_assemblies:
             cards.append(_card("assembly", asm.id, asm.name, asm.code,
-                               "Ansamblu", asm.production_steps or [], proj_code, proj_name, db))
+                               "Ansamblu", asm.production_steps or [], proj_code, proj_name, db,
+                               project_id=project_id))
 
             for ap in (asm.parts or []):
                 pid = ap.get("partId")
@@ -419,20 +520,14 @@ def _collect_cards(project, db: Session) -> list[str]:
                 if not part:
                     continue
                 cards.append(_card("part", part.id, part.name, part.code or "",
-                                   "Piesă", part.production_steps or [], proj_code, proj_name, db))
+                                   "Piesă", part.production_steps or [], proj_code, proj_name, db,
+                                   project_id=project_id))
 
         # Direct part cards
-        if product.product_parts:
-            direct_ids = [p["partId"] for p in product.product_parts if p.get("partId")]
-        else:
-            direct_ids = product.part_ids or []
-
-        for pid in direct_ids:
-            part = db.query(Part).filter(Part.id == pid).first()
-            if not part:
-                continue
+        for part in ordered_direct_parts:
             cards.append(_card("part", part.id, part.name, part.code or "",
-                               "Piesă directă", part.production_steps or [], proj_code, proj_name, db))
+                               "Piesă directă", part.production_steps or [], proj_code, proj_name, db,
+                               project_id=project_id))
 
     return cards
 
