@@ -327,7 +327,6 @@ body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background:
   min-height: 6.5mm;
 }
 .comp-row:last-child { border-bottom: none; }
-.comp-bullet { color: #888; font-size: 9pt; flex-shrink: 0; }
 .comp-type { font-size: 7pt; color: #666; font-weight: 600; flex-shrink: 0; }
 .comp-name { font-size: 9pt; font-weight: 600; flex: 1; }
 
@@ -400,18 +399,20 @@ def _steps_rows(steps: list, project_id: str, entity_type: str, entity_id: str) 
     return html
 
 
-def _composition_rows(items: list[dict]) -> str:
-    """Summarizes the assemblies / direct parts a Product card is made of."""
+def _composition_rows(items: list[dict], project_id: str) -> str:
+    """Summarizes the assemblies / direct parts a Product card is made of, each checkable."""
     if not items:
         return ""
-    rows = "".join(
-        f'<div class="comp-row">'
-        f'<span class="comp-bullet">&#8226;</span>'
-        f'<span class="comp-type">{it["type_label"]}:</span>'
-        f'<span class="comp-name">{it["name"]}</span>'
-        f'</div>'
-        for it in items
-    )
+    rows = ""
+    for it in items:
+        payload = build_project_item_barcode_payload(project_id, it["entity_type"], it["entity_id"], it.get("code", ""))
+        rows += (
+            f'<div class="comp-row" data-item-payload="{payload}">'
+            f'<span class="step-cb"></span>'
+            f'<span class="comp-type">{it["type_label"]}:</span>'
+            f'<span class="comp-name">{it["name"]}</span>'
+            f'</div>'
+        )
     return f'<div class="comp-header">Compoziție produs</div>{rows}'
 
 
@@ -427,7 +428,7 @@ def _card(entity_type: str, entity_id: str, name: str, code: str,
     if steps_html:
         sections.append(steps_html)
     if composition:
-        sections.append(_composition_rows(composition))
+        sections.append(_composition_rows(composition, project_id))
     if not sections:
         sections.append('<div class="no-steps">— Nicio etapă de producție —</div>')
     content_html = "".join(sections)
@@ -496,8 +497,10 @@ def _collect_cards(project, db: Session) -> list[str]:
         ordered_direct_parts = [direct_parts_by_id[pid] for pid in direct_ids if pid in direct_parts_by_id]
 
         composition = (
-            [{"type_label": "Ansamblu", "name": a.name} for a in ordered_assemblies]
-            + [{"type_label": "Piesă directă", "name": p.name} for p in ordered_direct_parts]
+            [{"type_label": "Ansamblu", "name": a.name, "entity_type": "assembly", "entity_id": a.id, "code": a.code}
+             for a in ordered_assemblies]
+            + [{"type_label": "Piesă directă", "name": p.name, "entity_type": "part", "entity_id": p.id, "code": p.code or ""}
+               for p in ordered_direct_parts]
         )
 
         # Product card — summarizes what it's made of so it's never empty
