@@ -35,8 +35,22 @@ class ProfileUpdate(BaseModel):
     newPassword: Optional[str] = None
 
 
+_ROLE_MAP = {
+    UserRole.ADMIN: "admin",
+    UserRole.ENGINEER: "engineer",
+    UserRole.PRODUCTION: "production",
+    UserRole.USER: "employee",  # legacy
+}
+
+_ROLE_REVERSE = {v: k for k, v in _ROLE_MAP.items()}
+
+
+def _parse_role(role_str: str) -> UserRole:
+    return _ROLE_REVERSE.get(role_str.lower(), UserRole.USER)
+
+
 def user_to_dict(u: User) -> dict:
-    role = "admin" if u.role == UserRole.ADMIN else "employee"
+    role = _ROLE_MAP.get(u.role, "employee")
     first = u.first_name or ""
     last = u.last_name or ""
     full_name = f"{first} {last}".strip() or u.name
@@ -119,7 +133,7 @@ def create_user(
 ):
     if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=400, detail="Email already in use")
-    role = UserRole.ADMIN if body.role.upper() == "ADMIN" else UserRole.USER
+    role = _parse_role(body.role)
     full_name = f"{body.firstName} {body.lastName}".strip()
     user = User(
         first_name=body.firstName,
@@ -157,7 +171,7 @@ def update_user(
     if body.password is not None:
         u.hashed_password = AuthService.hash_password(body.password)
     if body.role is not None:
-        u.role = UserRole.ADMIN if body.role.upper() == "ADMIN" else UserRole.USER
+        u.role = _parse_role(body.role)
     if body.status is not None:
         u.is_active = body.status == "active"
     db.commit()

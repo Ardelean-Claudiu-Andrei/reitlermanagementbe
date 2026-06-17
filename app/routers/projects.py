@@ -26,10 +26,13 @@ class ProjectCreate(BaseModel):
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
     installationCost: float = 0.0
+    paidAmount: float = 0.0
     items: list = []
     checklist: list = []
     issues: list = []
     activity: list = []
+    stepsCompleted: list = []
+    stepsTotal: int = 0
 
 
 class ProjectUpdate(BaseModel):
@@ -43,10 +46,13 @@ class ProjectUpdate(BaseModel):
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
     installationCost: Optional[float] = None
+    paidAmount: Optional[float] = None
     items: Optional[list] = None
     checklist: Optional[list] = None
     issues: Optional[list] = None
     activity: Optional[list] = None
+    stepsCompleted: Optional[list] = None
+    stepsTotal: Optional[int] = None
 
 
 class StatusUpdate(BaseModel):
@@ -87,10 +93,13 @@ def project_to_dict(p: Project) -> dict:
         "finishDate": p.finish_date,
         "warrantyExpiration": p.warranty_expiration,
         "installationCost": p.installation_cost or 0.0,
+        "paidAmount": p.paid_amount or 0.0,
         "items": p.items or [],
         "checklist": p.checklist or [],
         "issues": p.issues or [],
         "activity": p.activity or [],
+        "stepsCompleted": p.steps_completed or [],
+        "stepsTotal": p.steps_total or 0,
         "createdAt": p.created_at.isoformat() if p.created_at else None,
         "updatedAt": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -136,10 +145,13 @@ def create_project(
         finish_date=body.finishDate,
         warranty_expiration=body.warrantyExpiration,
         installation_cost=body.installationCost or 0.0,
+        paid_amount=body.paidAmount or 0.0,
         items=body.items or [],
         checklist=body.checklist or [],
         issues=body.issues or [],
         activity=body.activity or [],
+        steps_completed=body.stepsCompleted or [],
+        steps_total=body.stepsTotal or 0,
     )
     db.add(p)
     db.commit()
@@ -177,6 +189,8 @@ def update_project(
         p.warranty_expiration = body.warrantyExpiration
     if body.installationCost is not None:
         p.installation_cost = body.installationCost
+    if body.paidAmount is not None:
+        p.paid_amount = body.paidAmount
     if body.items is not None:
         p.items = body.items
     if body.checklist is not None:
@@ -185,6 +199,11 @@ def update_project(
         p.issues = body.issues
     if body.activity is not None:
         p.activity = body.activity
+    if body.stepsCompleted is not None:
+        p.steps_completed = body.stepsCompleted
+        flag_modified(p, "steps_completed")
+    if body.stepsTotal is not None:
+        p.steps_total = body.stepsTotal
     db.commit()
     db.refresh(p)
     return project_to_dict(p)
@@ -411,6 +430,48 @@ def export_project_production_steps_pdf(
     pdf_bytes = generate_project_steps_pdf(p, db)
 
     filename = f"pasi-productie-{p.code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{project_id}/export-laser-cutting")
+def export_project_laser_cutting_pdf(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.laser_cutting_pdf_service import generate_project_laser_cutting_pdf
+    pdf_bytes = generate_project_laser_cutting_pdf(p, db)
+
+    filename = f"taiere-laser-{p.code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{project_id}/export-production-cards")
+def export_project_production_cards_pdf(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.production_cards_pdf_service import generate_production_cards_pdf
+    pdf_bytes = generate_production_cards_pdf(p, db)
+
+    filename = f"fise-productie-{p.code}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
