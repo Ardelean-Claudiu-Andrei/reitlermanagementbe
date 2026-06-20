@@ -29,6 +29,8 @@ class Part(Base):
     requires_laser_cutting = Column(Boolean, default=False)
     welding_drawing_location = Column(String(500), default="")
     bending_drawing_location = Column(String(500), default="")
+    cad_location = Column(String(500), default="")
+    technical_drawing_location = Column(String(500), default="")
     production_steps = Column(JSON, default=list)                 # [AssemblyStep dicts]
     notes = Column(Text, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
