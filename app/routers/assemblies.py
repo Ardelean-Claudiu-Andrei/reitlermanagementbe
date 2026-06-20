@@ -15,6 +15,7 @@ class AssemblyCreate(BaseModel):
     name: str
     description: dict = {}
     parts: list = []
+    childAssemblies: list = []
     compositionType: str = "standalone"
     physicalLocation: str = ""
     productionSteps: list = []
@@ -26,6 +27,7 @@ class AssemblyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[dict] = None
     parts: Optional[list] = None
+    childAssemblies: Optional[list] = None
     compositionType: Optional[str] = None
     physicalLocation: Optional[str] = None
     productionSteps: Optional[list] = None
@@ -39,6 +41,7 @@ def assembly_to_dict(a: Assembly) -> dict:
         "name": a.name,
         "description": a.description or {"ro": "", "hu": "", "de": "", "en": ""},
         "parts": a.parts or [],
+        "childAssemblies": a.child_assemblies or [],
         "compositionType": a.composition_type or "standalone",
         "physicalLocation": a.physical_location or "",
         "productionSteps": a.production_steps or [],
@@ -46,6 +49,20 @@ def assembly_to_dict(a: Assembly) -> dict:
         "createdAt": a.created_at.isoformat() if a.created_at else None,
         "updatedAt": a.updated_at.isoformat() if a.updated_at else None,
     }
+
+
+def _has_circular_reference(parent_id: str, candidate_child_id: str, db: Session) -> bool:
+    """Return True if making candidate_child_id a child of parent_id would create a cycle."""
+    if candidate_child_id == parent_id:
+        return True
+    child = db.query(Assembly).filter(Assembly.id == candidate_child_id).first()
+    if not child:
+        return False
+    for entry in (child.child_assemblies or []):
+        nested_id = entry.get("assemblyId")
+        if nested_id and _has_circular_reference(parent_id, nested_id, db):
+            return True
+    return False
 
 
 @router.get("")
@@ -77,11 +94,16 @@ def create_assembly(
 ):
     if db.query(Assembly).filter(Assembly.code == body.code).first():
         raise HTTPException(status_code=400, detail="Assembly code already exists")
+    for entry in (body.childAssemblies or []):
+        child_id = entry.get("assemblyId")
+        if child_id and _has_circular_reference("__new__", child_id, db):
+            raise HTTPException(status_code=400, detail=f"Circular reference detected for assembly {child_id}")
     a = Assembly(
         code=body.code,
         name=body.name,
         description=body.description or {"ro": "", "hu": "", "de": "", "en": ""},
         parts=body.parts or [],
+        child_assemblies=body.childAssemblies or [],
         composition_type=body.compositionType or "standalone",
         physical_location=body.physicalLocation or "",
         production_steps=body.productionSteps or [],
@@ -114,6 +136,15 @@ def update_assembly(
         a.description = body.description
     if body.parts is not None:
         a.parts = body.parts
+    if body.childAssemblies is not None:
+        for entry in body.childAssemblies:
+            child_id = entry.get("assemblyId")
+            if child_id and _has_circular_reference(assembly_id, child_id, db):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Circular reference: assembly {child_id} already contains {assembly_id}",
+                )
+        a.child_assemblies = body.childAssemblies
     if body.compositionType is not None:
         a.composition_type = body.compositionType
     if body.physicalLocation is not None:

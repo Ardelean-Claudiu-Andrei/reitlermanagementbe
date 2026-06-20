@@ -16,7 +16,8 @@ class Assembly(Base):
     name = Column(String(200), nullable=False)
     description = Column(JSON, default=dict)         # {"ro": "", "hu": "", "de": "", "en": ""}
     parts = Column(JSON, default=list)               # [{"partId": "", "quantity": 0}]
-    composition_type = Column(String(50), default="standalone")  # "from_parts" | "standalone"
+    child_assemblies = Column(JSON, default=list)    # [{"assemblyId": "", "quantity": 1}]
+    composition_type = Column(String(50), default="standalone")  # "from_parts" | "from_assemblies" | "standalone"
     physical_location = Column(String(300), default="")
     production_steps = Column(JSON, default=list)    # [AssemblyStep dicts]
     notes = Column(Text, default="")
