@@ -15,6 +15,7 @@ from app.models.product import Product
 from app.models.assembly import Assembly
 from app.models.part import Part
 from app.models.uploaded_file import UploadedFile
+from app.services.assembly_tree import iter_assembly_nodes
 
 # ─── Icon helpers ─────────────────────────────────────────────────────────────
 
@@ -510,22 +511,24 @@ def _collect_cards(project, db: Session) -> list[str]:
                            "Produs", prod_steps, proj_code, proj_name, db,
                            project_id=project_id, composition=composition))
 
-        # Assembly cards + their part cards
-        for asm in ordered_assemblies:
-            cards.append(_card("assembly", asm.id, asm.name, asm.code,
-                               "Ansamblu", asm.production_steps or [], proj_code, proj_name, db,
-                               project_id=project_id))
-
-            for ap in (asm.parts or []):
-                pid = ap.get("partId")
-                if not pid:
-                    continue
-                part = db.query(Part).filter(Part.id == pid).first()
-                if not part:
-                    continue
-                cards.append(_card("part", part.id, part.name, part.code or "",
-                                   "Piesă", part.production_steps or [], proj_code, proj_name, db,
+        # Assembly cards + their part cards (fully recursive via iter_assembly_nodes)
+        for asm_id in asm_ids:
+            for asm, depth in iter_assembly_nodes(asm_id, db):
+                type_label = "Ansamblu" if depth == 0 else f"Sub-ansamblu (niv. {depth})"
+                cards.append(_card("assembly", asm.id, asm.name, asm.code,
+                                   type_label, asm.production_steps or [], proj_code, proj_name, db,
                                    project_id=project_id))
+
+                for ap in (asm.parts or []):
+                    pid = ap.get("partId")
+                    if not pid:
+                        continue
+                    part = db.query(Part).filter(Part.id == pid).first()
+                    if not part:
+                        continue
+                    cards.append(_card("part", part.id, part.name, part.code or "",
+                                       "Piesă", part.production_steps or [], proj_code, proj_name, db,
+                                       project_id=project_id))
 
         # Direct part cards
         for part in ordered_direct_parts:

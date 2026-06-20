@@ -8,7 +8,6 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.product import Product
 from app.models.part import Part
-from app.models.assembly import Assembly
 
 router = APIRouter()
 
@@ -94,18 +93,14 @@ def _get_part_ids(product: Product) -> list:
 
 def _has_laser_cutting(product: Product, db: Session) -> bool:
     """Return True if product or any of its parts (direct or via assemblies) require laser cutting."""
+    from app.services.assembly_tree import assembly_requires_laser
     for part_id in _get_part_ids(product):
         part = db.query(Part).filter(Part.id == part_id).first()
         if part and part.requires_laser_cutting:
             return True
     for assembly_id in _get_assembly_ids(product):
-        assembly = db.query(Assembly).filter(Assembly.id == assembly_id).first()
-        if not assembly:
-            continue
-        for ap in (assembly.parts or []):
-            part = db.query(Part).filter(Part.id == ap.get("partId")).first()
-            if part and part.requires_laser_cutting:
-                return True
+        if assembly_requires_laser(assembly_id, db):
+            return True
     return False
 
 

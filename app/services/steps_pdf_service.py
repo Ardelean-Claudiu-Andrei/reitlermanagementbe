@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.models.product import Product
 from app.models.assembly import Assembly
 from app.models.part import Part
+from app.services.assembly_tree import iter_assembly_nodes
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -107,6 +108,52 @@ def _render_steps(steps: list) -> str:
     return f'<div class="steps-list">{"".join(_render_step(s, i + 1) for i, s in enumerate(steps))}</div>'
 
 
+def _render_assembly(asm: Assembly, db: Session, depth: int = 0) -> str:
+    """Render one assembly section with its parts and child assemblies, recursively."""
+    asm_steps: list = asm.production_steps or []
+    asm_inner = []
+    if asm_steps:
+        asm_inner.append(_render_steps(asm_steps))
+
+    for ap in (asm.parts or []):
+        part_id = ap.get("partId")
+        if not part_id:
+            continue
+        part = db.query(Part).filter(Part.id == part_id).first()
+        if not part:
+            continue
+        part_steps: list = part.production_steps or []
+        if not part_steps:
+            continue
+        laser_label = ' <span class="laser-label">⚡ Laser</span>' if part.requires_laser_cutting else ""
+        asm_inner.append(f"""
+            <div class="part-section">
+              <div class="part-title">Piesă: {part.name}{laser_label}</div>
+              {_render_steps(part_steps)}
+            </div>""")
+
+    for ca in (asm.child_assemblies or []):
+        child_id = ca.get("assemblyId")
+        if not child_id:
+            continue
+        child_asm = db.query(Assembly).filter(Assembly.id == child_id).first()
+        if not child_asm:
+            continue
+        child_html = _render_assembly(child_asm, db, depth + 1)
+        if child_html:
+            asm_inner.append(child_html)
+
+    if not asm_inner:
+        return ""
+
+    indent = 12 + depth * 12
+    return f"""
+        <div class="assembly-section" style="margin-left:{indent}px">
+          <div class="assembly-title">Ansamblu: {asm.name} <span class="assembly-code-label">{asm.code}</span></div>
+          {"".join(asm_inner)}
+        </div>"""
+
+
 def _build_product_html(product: Product, db: Session) -> str:
     product_steps: list = product.production_steps or product.assembly_steps or []
 
@@ -116,45 +163,27 @@ def _build_product_html(product: Product, db: Session) -> str:
     if product_steps:
         body_parts.append(_render_steps(product_steps))
 
-    # Assembly nodes
-    for asm_id in (product.assembly_ids or []):
+    # Assembly nodes (recursive)
+    if product.product_assemblies:
+        asm_ids = [a["assemblyId"] for a in product.product_assemblies if a.get("assemblyId")]
+    else:
+        asm_ids = product.assembly_ids or []
+
+    for asm_id in asm_ids:
         asm = db.query(Assembly).filter(Assembly.id == asm_id).first()
         if not asm:
             continue
-        asm_steps: list = asm.production_steps or []
-
-        asm_inner = []
-        if asm_steps:
-            asm_inner.append(_render_steps(asm_steps))
-
-        for ap in (asm.parts or []):
-            part_id = ap.get("partId")
-            if not part_id:
-                continue
-            part = db.query(Part).filter(Part.id == part_id).first()
-            if not part:
-                continue
-            part_steps: list = part.production_steps or []
-            if not part_steps:
-                continue
-            laser_label = ' <span class="laser-label">⚡ Laser</span>' if part.requires_laser_cutting else ""
-            asm_inner.append(f"""
-            <div class="part-section">
-              <div class="part-title">Piesă: {part.name}{laser_label}</div>
-              {_render_steps(part_steps)}
-            </div>""")
-
-        if not asm_inner:
-            continue
-
-        body_parts.append(f"""
-        <div class="assembly-section">
-          <div class="assembly-title">Ansamblu: {asm.name} <span class="assembly-code-label">{asm.code}</span></div>
-          {"".join(asm_inner)}
-        </div>""")
+        html = _render_assembly(asm, db)
+        if html:
+            body_parts.append(html)
 
     # Direct parts
-    for part_id in (product.part_ids or []):
+    if product.product_parts:
+        direct_ids = [p["partId"] for p in product.product_parts if p.get("partId")]
+    else:
+        direct_ids = product.part_ids or []
+
+    for part_id in direct_ids:
         part = db.query(Part).filter(Part.id == part_id).first()
         if not part:
             continue
