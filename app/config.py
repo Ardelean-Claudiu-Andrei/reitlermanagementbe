@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     DB_PASSWORD: str
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 960  # 16 hours
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     APP_ENV: str = "development"
     APP_DEBUG: bool = False
