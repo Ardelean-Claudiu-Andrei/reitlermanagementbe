@@ -11,4 +11,3 @@ static/pdfs/
 *.db
 .DS_Store
 .python-version
-alembic/versions/

@@ -26,6 +26,7 @@ class ProjectCreate(BaseModel):
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
     installationCost: float = 0.0
+    finalPrice: Optional[float] = None
     paidAmount: float = 0.0
     items: list = []
     checklist: list = []
@@ -46,6 +47,7 @@ class ProjectUpdate(BaseModel):
     finishDate: Optional[str] = None
     warrantyExpiration: Optional[str] = None
     installationCost: Optional[float] = None
+    finalPrice: Optional[float] = None
     paidAmount: Optional[float] = None
     items: Optional[list] = None
     checklist: Optional[list] = None
@@ -93,6 +95,7 @@ def project_to_dict(p: Project) -> dict:
         "finishDate": p.finish_date,
         "warrantyExpiration": p.warranty_expiration,
         "installationCost": p.installation_cost or 0.0,
+        "finalPrice": p.final_price,
         "paidAmount": p.paid_amount or 0.0,
         "items": p.items or [],
         "checklist": p.checklist or [],
@@ -145,6 +148,7 @@ def create_project(
         finish_date=body.finishDate,
         warranty_expiration=body.warrantyExpiration,
         installation_cost=body.installationCost or 0.0,
+        final_price=body.finalPrice,
         paid_amount=body.paidAmount or 0.0,
         items=body.items or [],
         checklist=body.checklist or [],
@@ -189,6 +193,8 @@ def update_project(
         p.warranty_expiration = body.warrantyExpiration
     if body.installationCost is not None:
         p.installation_cost = body.installationCost
+    if body.finalPrice is not None:
+        p.final_price = body.finalPrice
     if body.paidAmount is not None:
         p.paid_amount = body.paidAmount
     if body.items is not None:
@@ -391,6 +397,12 @@ def create_project_from_quote(
         for item in (q.items or [])
     ]
 
+    quote_subtotal = sum(
+        item.get("unitPrice", 0) * item.get("quantity", 0)
+        for item in (q.items or [])
+    )
+    quote_total = quote_subtotal + (q.installation or 0.0)
+
     p = Project(
         code=f"PRJ-{today.year}-{str(project_count).zfill(3)}",
         name=q.name,
@@ -400,6 +412,7 @@ def create_project_from_quote(
         start_date=today.isoformat(),
         deadline=deadline.isoformat(),
         installation_cost=q.installation or 0.0,
+        final_price=quote_total,
         items=items,
         checklist=[],
         issues=[],

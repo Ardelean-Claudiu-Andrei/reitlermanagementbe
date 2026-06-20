@@ -1,5 +1,6 @@
 import os
 import base64
+from datetime import datetime
 from xml.etree import ElementTree as ET
 from sqlalchemy.orm import Session
 from app.models.product import Product
@@ -269,6 +270,17 @@ tbody td { border: 1.5px solid #000; padding: 0; }
   border: 1.5px solid #000;
   display: inline-block;
 }
+
+.project-info {
+  margin-bottom: 6mm;
+  font-size: 10pt;
+  color: #333;
+}
+.project-info .project-name {
+  font-size: 13pt;
+  font-weight: bold;
+  color: #000;
+}
 """
 
 _HTML_WRAPPER = """<!DOCTYPE html>
@@ -419,6 +431,7 @@ def generate_laser_cutting_pdf(product: Product, db: Session) -> bytes:
 
 def generate_project_laser_cutting_pdf(project, db: Session) -> bytes:
     from weasyprint import HTML
+    generated_at = datetime.now().strftime("%d.%m.%Y")
     items = _collect_project_laser_parts(project, db)
     if not items:
         return HTML(string=(
@@ -428,4 +441,14 @@ def generate_project_laser_cutting_pdf(project, db: Session) -> bytes:
             '</body></html>'
         )).write_pdf()
     rows = "".join(_row(i, db) for i in items)
-    return HTML(string=_HTML_WRAPPER.format(css=_CSS, rows=rows)).write_pdf()
+    project_header = (
+        f'<div class="project-info">'
+        f'  <div>Proiect: <span class="project-name">{project.name}</span></div>'
+        f'  <div>Generat la: {generated_at}</div>'
+        f'</div>'
+    )
+    html = _HTML_WRAPPER.replace(
+        '<table>',
+        f'{project_header}\n  <table>',
+    )
+    return HTML(string=html.format(css=_CSS, rows=rows)).write_pdf()

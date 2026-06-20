@@ -23,6 +23,7 @@ class Project(Base):
     finish_date = Column(String(50), nullable=True)
     warranty_expiration = Column(String(50), nullable=True)
     installation_cost = Column(Float, default=0.0)  # from quote, if any
+    final_price = Column(Float, nullable=True)       # manually editable project price
     paid_amount = Column(Float, default=0.0)
     items = Column(JSON, default=list)  # [{"productId","quantity","unitPrice","notes","fromInventory"}]
     checklist = Column(JSON, default=list)  # [{"id","title","done","note","doneAt"}]
