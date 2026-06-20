@@ -19,6 +19,9 @@ class Assembly(Base):
     child_assemblies = Column(JSON, default=list)    # [{"assemblyId": "", "quantity": 1}]
     composition_type = Column(String(50), default="standalone")  # "from_parts" | "from_assemblies" | "standalone"
     physical_location = Column(String(300), default="")
+    welding_drawing_location = Column(String(500), default="")
+    technical_drawing_location = Column(String(500), default="")
+    cad_location = Column(String(500), default="")
     production_steps = Column(JSON, default=list)    # [AssemblyStep dicts]
     notes = Column(Text, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
