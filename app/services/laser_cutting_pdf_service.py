@@ -7,6 +7,7 @@ from app.models.product import Product
 from app.models.part import Part
 from app.models.assembly import Assembly
 from app.models.uploaded_file import UploadedFile
+from app.services.assembly_tree import iter_assembly_parts
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -379,15 +380,8 @@ def _collect_laser_parts(product: Product, db: Session, product_qty: int = 1) ->
         asm_qty_map = {aid: 1 for aid in (product.assembly_ids or [])}
 
     for asm_id, asm_qty in asm_qty_map.items():
-        asm = db.query(Assembly).filter(Assembly.id == asm_id).first()
-        if not asm:
-            continue
-        for ap in (asm.parts or []):
-            pid = ap.get("partId")
-            if pid:
-                part = db.query(Part).filter(Part.id == pid).first()
-                if part:
-                    _add(part, ap.get("quantity", 1) * asm_qty)
+        for part, qty in iter_assembly_parts(asm_id, db, multiplier=asm_qty):
+            _add(part, qty)
 
     return items
 
