@@ -18,6 +18,9 @@ class AssemblyCreate(BaseModel):
     childAssemblies: list = []
     compositionType: str = "standalone"
     physicalLocation: str = ""
+    weldingDrawingLocation: str = ""
+    technicalDrawingLocation: str = ""
+    cadLocation: str = ""
     productionSteps: list = []
     notes: str = ""
 
@@ -30,6 +33,9 @@ class AssemblyUpdate(BaseModel):
     childAssemblies: Optional[list] = None
     compositionType: Optional[str] = None
     physicalLocation: Optional[str] = None
+    weldingDrawingLocation: Optional[str] = None
+    technicalDrawingLocation: Optional[str] = None
+    cadLocation: Optional[str] = None
     productionSteps: Optional[list] = None
     notes: Optional[str] = None
 
@@ -44,6 +50,9 @@ def assembly_to_dict(a: Assembly) -> dict:
         "childAssemblies": a.child_assemblies or [],
         "compositionType": a.composition_type or "standalone",
         "physicalLocation": a.physical_location or "",
+        "weldingDrawingLocation": a.welding_drawing_location or "",
+        "technicalDrawingLocation": a.technical_drawing_location or "",
+        "cadLocation": a.cad_location or "",
         "productionSteps": a.production_steps or [],
         "notes": a.notes or "",
         "createdAt": a.created_at.isoformat() if a.created_at else None,
@@ -106,6 +115,9 @@ def create_assembly(
         child_assemblies=body.childAssemblies or [],
         composition_type=body.compositionType or "standalone",
         physical_location=body.physicalLocation or "",
+        welding_drawing_location=body.weldingDrawingLocation or "",
+        technical_drawing_location=body.technicalDrawingLocation or "",
+        cad_location=body.cadLocation or "",
         production_steps=body.productionSteps or [],
         notes=body.notes,
     )
@@ -149,6 +161,12 @@ def update_assembly(
         a.composition_type = body.compositionType
     if body.physicalLocation is not None:
         a.physical_location = body.physicalLocation
+    if body.weldingDrawingLocation is not None:
+        a.welding_drawing_location = body.weldingDrawingLocation
+    if body.technicalDrawingLocation is not None:
+        a.technical_drawing_location = body.technicalDrawingLocation
+    if body.cadLocation is not None:
+        a.cad_location = body.cadLocation
     if body.productionSteps is not None:
         a.production_steps = body.productionSteps
     if body.notes is not None:

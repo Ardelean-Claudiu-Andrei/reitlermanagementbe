@@ -26,6 +26,8 @@ class PartCreate(BaseModel):
     requiresLaserCutting: bool = False
     weldingDrawingLocation: str = ""
     bendingDrawingLocation: str = ""
+    cadLocation: str = ""
+    technicalDrawingLocation: str = ""
     productionSteps: list = []
     notes: str = ""
     fileName: str = ""
@@ -48,6 +50,8 @@ class PartUpdate(BaseModel):
     requiresLaserCutting: Optional[bool] = None
     weldingDrawingLocation: Optional[str] = None
     bendingDrawingLocation: Optional[str] = None
+    cadLocation: Optional[str] = None
+    technicalDrawingLocation: Optional[str] = None
     productionSteps: Optional[list] = None
     notes: Optional[str] = None
     fileName: Optional[str] = None
@@ -72,6 +76,8 @@ def part_to_dict(p: Part) -> dict:
         "requiresLaserCutting": p.requires_laser_cutting or False,
         "weldingDrawingLocation": p.welding_drawing_location or "",
         "bendingDrawingLocation": p.bending_drawing_location or "",
+        "cadLocation": p.cad_location or "",
+        "technicalDrawingLocation": p.technical_drawing_location or "",
         "productionSteps": p.production_steps or [],
         "notes": p.notes or "",
         "fileName": p.file_name or "",
@@ -126,6 +132,8 @@ def create_part(
         requires_laser_cutting=body.requiresLaserCutting,
         welding_drawing_location=body.weldingDrawingLocation,
         bending_drawing_location=body.bendingDrawingLocation,
+        cad_location=body.cadLocation,
+        technical_drawing_location=body.technicalDrawingLocation,
         production_steps=body.productionSteps or [],
         notes=body.notes,
         file_name=body.fileName,
@@ -179,6 +187,10 @@ def update_part(
         p.welding_drawing_location = body.weldingDrawingLocation
     if body.bendingDrawingLocation is not None:
         p.bending_drawing_location = body.bendingDrawingLocation
+    if body.cadLocation is not None:
+        p.cad_location = body.cadLocation
+    if body.technicalDrawingLocation is not None:
+        p.technical_drawing_location = body.technicalDrawingLocation
     if body.productionSteps is not None:
         p.production_steps = body.productionSteps
     if body.notes is not None:
