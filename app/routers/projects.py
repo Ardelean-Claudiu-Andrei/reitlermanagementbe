@@ -15,6 +15,39 @@ from app.models.quote import Quote
 router = APIRouter()
 
 
+def _item_kind(item: dict) -> tuple[str, str]:
+    """Normalise a project item to (kind, entity_id). Backward-compatible.
+
+    New format:  {"type": "product"|"assembly"|"part", "productId"|"assemblyId"|"partId": "..."}
+    Legacy format (no "type"): treated as product via "productId".
+    """
+    kind = item.get("type", "product")
+    if kind == "assembly":
+        return "assembly", item.get("assemblyId", "")
+    if kind == "part":
+        return "part", item.get("partId", "")
+    return "product", item.get("productId", "")
+
+
+def _validate_items(items: list, db: Session) -> None:
+    from app.models.product import Product
+    from app.models.assembly import Assembly
+    from app.models.part import Part
+    for item in items:
+        kind, eid = _item_kind(item)
+        if not eid:
+            raise HTTPException(status_code=400, detail=f"Item is missing its entity ID (type={kind!r})")
+        if kind == "product":
+            if not db.query(Product).filter(Product.id == eid).first():
+                raise HTTPException(status_code=400, detail=f"Product {eid!r} not found")
+        elif kind == "assembly":
+            if not db.query(Assembly).filter(Assembly.id == eid).first():
+                raise HTTPException(status_code=400, detail=f"Assembly {eid!r} not found")
+        elif kind == "part":
+            if not db.query(Part).filter(Part.id == eid).first():
+                raise HTTPException(status_code=400, detail=f"Part {eid!r} not found")
+
+
 class ProjectCreate(BaseModel):
     code: str
     name: str
@@ -137,6 +170,8 @@ def create_project(
 ):
     if db.query(Project).filter(Project.code == body.code).first():
         raise HTTPException(status_code=400, detail="Project code already exists")
+    if body.items:
+        _validate_items(body.items, db)
     p = Project(
         code=body.code,
         name=body.name,
@@ -198,6 +233,7 @@ def update_project(
     if body.paidAmount is not None:
         p.paid_amount = body.paidAmount
     if body.items is not None:
+        _validate_items(body.items, db)
         p.items = body.items
     if body.checklist is not None:
         p.checklist = body.checklist

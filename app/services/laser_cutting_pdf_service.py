@@ -387,22 +387,48 @@ def _collect_laser_parts(product: Product, db: Session, product_qty: int = 1) ->
 
 
 def _collect_project_laser_parts(project, db: Session) -> list[dict]:
+    from app.routers.projects import _item_kind
+
     all_items: list[dict] = []
     seen: dict[str, int] = {}
 
+    def _merge(part_item: dict) -> None:
+        eid = part_item["entity_id"]
+        if eid in seen:
+            all_items[seen[eid]]["quantity"] += part_item["quantity"]
+        else:
+            seen[eid] = len(all_items)
+            all_items.append(part_item)
+
+    def _part_item(p: Part, qty: int) -> dict:
+        return {
+            "entity_id": p.id,
+            "entity_type": "part",
+            "name": p.name,
+            "quantity": qty,
+            "location": p.drawing_location or p.file_location or "",
+        }
+
     for item in (project.items or []):
-        pid = item.get("productId")
-        if not pid:
-            continue
-        product = db.query(Product).filter(Product.id == pid).first()
-        if not product:
-            continue
-        for part_item in _collect_laser_parts(product, db, product_qty=item.get("quantity", 1)):
-            if part_item["entity_id"] in seen:
-                all_items[seen[part_item["entity_id"]]]["quantity"] += part_item["quantity"]
-            else:
-                seen[part_item["entity_id"]] = len(all_items)
-                all_items.append(part_item)
+        kind, eid = _item_kind(item)
+        qty = item.get("quantity", 1)
+
+        if kind == "product":
+            product = db.query(Product).filter(Product.id == eid).first()
+            if not product:
+                continue
+            for part_item in _collect_laser_parts(product, db, product_qty=qty):
+                _merge(part_item)
+
+        elif kind == "assembly":
+            for part, part_qty in iter_assembly_parts(eid, db, multiplier=qty):
+                if part.requires_laser_cutting:
+                    _merge(_part_item(part, part_qty))
+
+        elif kind == "part":
+            part = db.query(Part).filter(Part.id == eid).first()
+            if part and part.requires_laser_cutting:
+                _merge(_part_item(part, qty))
 
     return all_items
 
