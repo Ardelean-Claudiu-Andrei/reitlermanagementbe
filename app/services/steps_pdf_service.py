@@ -220,19 +220,49 @@ def generate_product_steps_pdf(product: Product, db: Session) -> bytes:
 
 
 def generate_project_steps_pdf(project, db: Session) -> bytes:
-    """Generate a steps PDF for all products in a project."""
+    """Generate a steps PDF for all items (products / assemblies / parts) in a project."""
     from weasyprint import HTML
+    from app.routers.projects import _item_kind
 
     subtitle = f"Proiect: {project.name} — Cod: {project.code}"
     content_parts = []
+
     for item in (project.items or []):
-        product_id = item.get("productId")
-        if not product_id:
-            continue
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            continue
-        content_parts.append(_build_product_html(product, db))
+        kind, eid = _item_kind(item)
+
+        if kind == "product":
+            product = db.query(Product).filter(Product.id == eid).first()
+            if not product:
+                continue
+            content_parts.append(_build_product_html(product, db))
+
+        elif kind == "assembly":
+            asm = db.query(Assembly).filter(Assembly.id == eid).first()
+            if not asm:
+                continue
+            html = _render_assembly(asm, db)
+            if html:
+                content_parts.append(f"""
+    <div class="product-block">
+      <div class="product-title">Ansamblu: {asm.name} <span class="product-code">{asm.code}</span></div>
+      {html}
+    </div>
+    <hr class="separator"/>""")
+
+        elif kind == "part":
+            part = db.query(Part).filter(Part.id == eid).first()
+            if not part:
+                continue
+            part_steps: list = part.production_steps or []
+            if not part_steps:
+                continue
+            laser_label = ' <span class="laser-label">⚡ Laser</span>' if part.requires_laser_cutting else ""
+            content_parts.append(f"""
+    <div class="product-block">
+      <div class="product-title">Piesă: {part.name}{laser_label}</div>
+      {_render_steps(part_steps)}
+    </div>
+    <hr class="separator"/>""")
 
     content = "".join(content_parts) if content_parts else '<p class="no-steps">Nu există pași de producție.</p>'
     html = HTML_TEMPLATE.format(subtitle=subtitle, content=content)

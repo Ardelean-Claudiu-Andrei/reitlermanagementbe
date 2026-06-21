@@ -464,76 +464,86 @@ def _card(entity_type: str, entity_id: str, name: str, code: str,
 # ─── Hierarchy traversal ──────────────────────────────────────────────────────
 
 def _collect_cards(project, db: Session) -> list[str]:
+    from app.routers.projects import _item_kind
+
     cards: list[str] = []
     proj_code = project.code or ""
     proj_name = project.name or ""
     project_id = project.id
 
-    for item in (project.items or []):
-        product_id = item.get("productId")
-        if not product_id:
-            continue
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            continue
-
-        # Resolve assemblies for this product up front — reused for both the
-        # product card's composition summary and the assembly cards below.
-        if product.product_assemblies:
-            asm_ids = [a["assemblyId"] for a in product.product_assemblies if a.get("assemblyId")]
-        else:
-            asm_ids = product.assembly_ids or []
-        assemblies_by_id = {
-            a.id: a for a in (db.query(Assembly).filter(Assembly.id.in_(asm_ids)).all() if asm_ids else [])
-        }
-        ordered_assemblies = [assemblies_by_id[aid] for aid in asm_ids if aid in assemblies_by_id]
-
-        # Resolve direct parts for this product up front — same reuse as above.
-        if product.product_parts:
-            direct_ids = [p["partId"] for p in product.product_parts if p.get("partId")]
-        else:
-            direct_ids = product.part_ids or []
-        direct_parts_by_id = {
-            p.id: p for p in (db.query(Part).filter(Part.id.in_(direct_ids)).all() if direct_ids else [])
-        }
-        ordered_direct_parts = [direct_parts_by_id[pid] for pid in direct_ids if pid in direct_parts_by_id]
-
-        composition = (
-            [{"type_label": "Ansamblu", "name": a.name, "entity_type": "assembly", "entity_id": a.id, "code": a.code}
-             for a in ordered_assemblies]
-            + [{"type_label": "Piesă directă", "name": p.name, "entity_type": "part", "entity_id": p.id, "code": p.code or ""}
-               for p in ordered_direct_parts]
-        )
-
-        # Product card — summarizes what it's made of so it's never empty
-        prod_steps = product.production_steps or product.assembly_steps or []
-        cards.append(_card("product", product.id, product.name, product.code,
-                           "Produs", prod_steps, proj_code, proj_name, db,
-                           project_id=project_id, composition=composition))
-
-        # Assembly cards + their part cards (fully recursive via iter_assembly_nodes)
-        for asm_id in asm_ids:
-            for asm, depth in iter_assembly_nodes(asm_id, db):
-                type_label = "Ansamblu" if depth == 0 else f"Sub-ansamblu (niv. {depth})"
-                cards.append(_card("assembly", asm.id, asm.name, asm.code,
-                                   type_label, asm.production_steps or [], proj_code, proj_name, db,
+    def _asm_cards(asm_id: str) -> None:
+        """Emit cards for an assembly and all its descendants (recursive via iter_assembly_nodes)."""
+        for asm, depth in iter_assembly_nodes(asm_id, db):
+            type_label = "Ansamblu" if depth == 0 else f"Sub-ansamblu (niv. {depth})"
+            cards.append(_card("assembly", asm.id, asm.name, asm.code,
+                               type_label, asm.production_steps or [], proj_code, proj_name, db,
+                               project_id=project_id))
+            for ap in (asm.parts or []):
+                pid = ap.get("partId")
+                if not pid:
+                    continue
+                part = db.query(Part).filter(Part.id == pid).first()
+                if not part:
+                    continue
+                cards.append(_card("part", part.id, part.name, part.code or "",
+                                   "Piesă", part.production_steps or [], proj_code, proj_name, db,
                                    project_id=project_id))
 
-                for ap in (asm.parts or []):
-                    pid = ap.get("partId")
-                    if not pid:
-                        continue
-                    part = db.query(Part).filter(Part.id == pid).first()
-                    if not part:
-                        continue
-                    cards.append(_card("part", part.id, part.name, part.code or "",
-                                       "Piesă", part.production_steps or [], proj_code, proj_name, db,
-                                       project_id=project_id))
+    for item in (project.items or []):
+        kind, eid = _item_kind(item)
 
-        # Direct part cards
-        for part in ordered_direct_parts:
+        if kind == "product":
+            product = db.query(Product).filter(Product.id == eid).first()
+            if not product:
+                continue
+
+            if product.product_assemblies:
+                asm_ids = [a["assemblyId"] for a in product.product_assemblies if a.get("assemblyId")]
+            else:
+                asm_ids = product.assembly_ids or []
+            assemblies_by_id = {
+                a.id: a for a in (db.query(Assembly).filter(Assembly.id.in_(asm_ids)).all() if asm_ids else [])
+            }
+            ordered_assemblies = [assemblies_by_id[aid] for aid in asm_ids if aid in assemblies_by_id]
+
+            if product.product_parts:
+                direct_ids = [p["partId"] for p in product.product_parts if p.get("partId")]
+            else:
+                direct_ids = product.part_ids or []
+            direct_parts_by_id = {
+                p.id: p for p in (db.query(Part).filter(Part.id.in_(direct_ids)).all() if direct_ids else [])
+            }
+            ordered_direct_parts = [direct_parts_by_id[pid] for pid in direct_ids if pid in direct_parts_by_id]
+
+            composition = (
+                [{"type_label": "Ansamblu", "name": a.name, "entity_type": "assembly", "entity_id": a.id, "code": a.code}
+                 for a in ordered_assemblies]
+                + [{"type_label": "Piesă directă", "name": p.name, "entity_type": "part", "entity_id": p.id, "code": p.code or ""}
+                   for p in ordered_direct_parts]
+            )
+
+            prod_steps = product.production_steps or product.assembly_steps or []
+            cards.append(_card("product", product.id, product.name, product.code,
+                               "Produs", prod_steps, proj_code, proj_name, db,
+                               project_id=project_id, composition=composition))
+
+            for aid in asm_ids:
+                _asm_cards(aid)
+
+            for part in ordered_direct_parts:
+                cards.append(_card("part", part.id, part.name, part.code or "",
+                                   "Piesă directă", part.production_steps or [], proj_code, proj_name, db,
+                                   project_id=project_id))
+
+        elif kind == "assembly":
+            _asm_cards(eid)
+
+        elif kind == "part":
+            part = db.query(Part).filter(Part.id == eid).first()
+            if not part:
+                continue
             cards.append(_card("part", part.id, part.name, part.code or "",
-                               "Piesă directă", part.production_steps or [], proj_code, proj_name, db,
+                               "Piesă", part.production_steps or [], proj_code, proj_name, db,
                                project_id=project_id))
 
     return cards
