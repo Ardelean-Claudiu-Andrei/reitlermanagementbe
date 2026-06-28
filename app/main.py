@@ -7,6 +7,7 @@ from app.routers import (
     offers, stats, parts, assemblies, quotes, projects, inventory, uploads, reports
 )
 from app.routers import settings as settings_router
+from app.routers import step_definitions
 
 app = FastAPI(
     title="Reitler Management API",
@@ -39,7 +40,8 @@ app.include_router(offers.router,      prefix="/api/offers",      tags=["Offers"
 app.include_router(stats.router,       prefix="/api/stats",       tags=["Stats"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(uploads.router,     prefix="/api/uploads",     tags=["Uploads"])
-app.include_router(reports.router,     prefix="/api/reports",     tags=["Reports"])
+app.include_router(reports.router,          prefix="/api/reports",          tags=["Reports"])
+app.include_router(step_definitions.router, prefix="/api/step-definitions", tags=["StepDefinitions"])
 
 
 @app.get("/health")
