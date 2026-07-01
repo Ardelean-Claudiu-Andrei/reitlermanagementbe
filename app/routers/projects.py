@@ -465,6 +465,39 @@ def create_project_from_quote(
     return project_to_dict(p)
 
 
+class StepToggleBody(BaseModel):
+    stepKey: str
+    stepsTotal: Optional[int] = None
+
+
+@router.patch("/{project_id}/steps/toggle")
+def toggle_step(
+    project_id: str,
+    body: StepToggleBody,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    steps = list(p.steps_completed or [])
+    if body.stepKey in steps:
+        steps.remove(body.stepKey)
+    else:
+        steps.append(body.stepKey)
+
+    p.steps_completed = steps
+    flag_modified(p, "steps_completed")
+
+    if body.stepsTotal is not None:
+        p.steps_total = body.stepsTotal
+
+    db.commit()
+    db.refresh(p)
+    return {"stepsCompleted": p.steps_completed, "stepsTotal": p.steps_total or 0}
+
+
 @router.get("/{project_id}/export-production-steps")
 def export_project_production_steps_pdf(
     project_id: str,

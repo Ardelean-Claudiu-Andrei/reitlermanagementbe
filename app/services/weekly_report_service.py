@@ -1,11 +1,9 @@
 """
 Weekly activity report computation.
 
-A "week" is the business week Monday → Friday. The report for a given week
-becomes available the moment that week's Friday 17:00 passes — at that point
-all Mon-Fri activity is final and the report is considered closed. Anything
-logged after Friday 17:00 (Friday evening / weekend) rolls into next week's
-report.
+A "week" is the full calendar week Monday → Sunday. The report for a given
+week becomes available the following Monday at 00:00 — at that point all
+Mon-Sun activity is final and the report is considered closed.
 
 No persistence: reports are computed on demand from current project data,
 the same pattern used by the other PDF/JSON exports in this codebase.
@@ -16,7 +14,6 @@ from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.client import Client
 
-REPORT_HOUR = 17  # Friday cutoff hour
 _FINALIZED_EXACT = {"Project finished", "Status changed to done"}
 
 
@@ -25,9 +22,13 @@ def _monday_of(d: date) -> date:
 
 
 def _week_bounds(week_start: date) -> tuple[date, date, datetime]:
-    """week_start must be a Monday. Returns (week_start, week_end_friday, available_at)."""
-    week_end = week_start + timedelta(days=4)
-    available_at = datetime.combine(week_end, time(REPORT_HOUR, 0))
+    """week_start must be a Monday. Returns (week_start, week_end_sunday, available_at).
+
+    available_at is the following Monday at 00:00 — the exclusive upper bound
+    for activity timestamps and the earliest moment the report is served.
+    """
+    week_end = week_start + timedelta(days=6)  # Sunday
+    available_at = datetime.combine(week_start + timedelta(days=7), time(0, 0))  # next Monday 00:00
     return week_start, week_end, available_at
 
 
@@ -37,7 +38,7 @@ def is_week_available(week_start: date) -> bool:
 
 
 def get_available_weeks(limit: int = 12) -> list[dict]:
-    """Most recent `limit` weeks whose Friday-17:00 cutoff has already passed."""
+    """Most recent `limit` weeks whose next-Monday-00:00 cutoff has already passed."""
     now = datetime.now()
     monday = _monday_of(now.date())
     _, _, available_at = _week_bounds(monday)
@@ -92,8 +93,8 @@ def load_projects_with_companies(db: Session) -> tuple[list[Project], dict[str, 
 def build_report(projects: list[Project], companies_by_id: dict[str, str], week_start: date) -> dict:
     week_start, week_end, window_end = _week_bounds(week_start)
     window_start = datetime.combine(week_start, time(0, 0))
-    next_week_start = week_start + timedelta(days=7)
-    next_week_end = week_start + timedelta(days=11)
+    next_week_start = week_start + timedelta(days=7)   # next Monday
+    next_week_end = week_start + timedelta(days=13)    # next Sunday
 
     progressed: list[dict] = []
     finalized: list[dict] = []
@@ -121,10 +122,10 @@ def build_report(projects: list[Project], companies_by_id: dict[str, str], week_
 
         activity_in_week = [
             a for a in (p.activity or [])
-            if (ts := _parse_ts(a.get("timestamp"))) and window_start <= ts <= window_end
+            if (ts := _parse_ts(a.get("timestamp"))) and window_start <= ts < window_end
         ]
         updated_at = p.updated_at.replace(tzinfo=None) if p.updated_at else None
-        updated_in_window = bool(updated_at and window_start <= updated_at <= window_end)
+        updated_in_window = bool(updated_at and window_start <= updated_at < window_end)
 
         if activity_in_week or updated_in_window:
             if activity_in_week:
