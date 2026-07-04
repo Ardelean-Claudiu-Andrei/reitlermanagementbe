@@ -1,6 +1,7 @@
+import math
 import uuid
-from datetime import datetime, date
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, date, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
@@ -13,6 +14,50 @@ from app.models.project import Project
 from app.models.quote import Quote
 
 router = APIRouter()
+
+ACTIVITY_PAGE_SIZE = 10
+
+
+def activity_timestamp_sort_value(entry: object) -> float:
+    """Return a float Unix timestamp for sorting an activity entry.
+
+    Always returns a float so mixed timezone-aware / timezone-naive datetimes
+    never reach a comparison that Python cannot perform.
+    Returns float('-inf') for any malformed or missing value so those entries
+    sort after all valid ones without crashing.
+    """
+    if not isinstance(entry, dict):
+        return float("-inf")
+
+    raw = entry.get("timestamp")
+
+    if not isinstance(raw, str) or not raw.strip():
+        return float("-inf")
+
+    value = raw.strip()
+
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+
+        parsed = datetime.fromisoformat(value)
+
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        else:
+            parsed = parsed.astimezone(timezone.utc)
+
+        return parsed.timestamp()
+    except (TypeError, ValueError, OverflowError):
+        return float("-inf")
+
+
+class PaginatedActivityResponse(BaseModel):
+    items: list
+    page: int
+    pageSize: int
+    total: int
+    totalPages: int
 
 
 def _item_kind(item: dict) -> tuple[str, str]:
@@ -160,6 +205,45 @@ def get_project(
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
     return project_to_dict(p)
+
+
+@router.get("/{project_id}/activity", response_model=PaginatedActivityResponse)
+def get_project_activity(
+    project_id: str,
+    page: int = Query(default=1, ge=1),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    raw_activity = list(p.activity or [])
+
+    # Sort descending: newest first. Use original array index as a secondary
+    # tiebreaker (higher index = more recently appended = should appear first).
+    indexed = list(enumerate(raw_activity))
+    indexed.sort(
+        key=lambda pair: (activity_timestamp_sort_value(pair[1]), pair[0]),
+        reverse=True,
+    )
+    sorted_items = [entry for _, entry in indexed]
+
+    total = len(sorted_items)
+    total_pages = max(1, math.ceil(total / ACTIVITY_PAGE_SIZE))
+    safe_page = min(page, total_pages)
+
+    start = (safe_page - 1) * ACTIVITY_PAGE_SIZE
+    end = start + ACTIVITY_PAGE_SIZE
+    page_items = sorted_items[start:end]
+
+    return PaginatedActivityResponse(
+        items=page_items,
+        page=safe_page,
+        pageSize=ACTIVITY_PAGE_SIZE,
+        total=total,
+        totalPages=total_pages,
+    )
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
