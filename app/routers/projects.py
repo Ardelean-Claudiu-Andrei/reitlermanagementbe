@@ -74,6 +74,47 @@ def _item_kind(item: dict) -> tuple[str, str]:
     return "product", item.get("productId", "")
 
 
+def _consolidate_project_items(items: list) -> list:
+    """Merge duplicate project items by summing quantities.
+
+    Two items are equivalent when they share type, entity ID, unit price,
+    inventory source, and notes. Preserves first-occurrence order.
+    Does not mutate the input list.
+    """
+    seen: dict[tuple, int] = {}
+    result: list[dict] = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            result.append(item)
+            continue
+
+        kind, eid = _item_kind(item)
+        key = (
+            kind,
+            eid,
+            float(item.get("unitPrice", 0) or 0),
+            bool(item.get("fromInventory", False)),
+            (item.get("notes", "") or "").strip(),
+        )
+
+        try:
+            qty = max(1, int(float(item.get("quantity", 1) or 1)))
+        except (TypeError, ValueError):
+            qty = 1
+
+        if key in seen:
+            idx = seen[key]
+            merged = dict(result[idx])
+            merged["quantity"] = merged.get("quantity", 1) + qty
+            result[idx] = merged
+        else:
+            seen[key] = len(result)
+            result.append(dict(item, quantity=qty))
+
+    return result
+
+
 def _validate_items(items: list, db: Session) -> None:
     from app.models.product import Product
     from app.models.assembly import Assembly
@@ -317,8 +358,9 @@ def update_project(
     if body.paidAmount is not None:
         p.paid_amount = body.paidAmount
     if body.items is not None:
-        _validate_items(body.items, db)
-        p.items = body.items
+        consolidated = _consolidate_project_items(body.items)
+        _validate_items(consolidated, db)
+        p.items = consolidated
     if body.checklist is not None:
         p.checklist = body.checklist
     if body.issues is not None:
