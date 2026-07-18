@@ -393,7 +393,7 @@ def update_project_status(
         "id": str(uuid.uuid4()),
         "action": f"Status changed to {body.status.replace('-', ' ')}",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     db.commit()
@@ -420,7 +420,7 @@ def finish_project(
         "id": str(uuid.uuid4()),
         "action": "Project finished",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     db.commit()
@@ -489,7 +489,7 @@ def add_project_issue(
         "id": str(uuid.uuid4()),
         "action": f"Issue reported: {body.description[:50]}",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     db.commit()
@@ -521,7 +521,7 @@ def resolve_issue(
         "id": str(uuid.uuid4()),
         "action": "Issue resolved",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     flag_modified(p, "activity")
@@ -582,7 +582,7 @@ def create_project_from_quote(
             "id": str(uuid.uuid4()),
             "action": "Project created from quote",
             "user": current_user.name,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }],
     )
     db.add(p)
