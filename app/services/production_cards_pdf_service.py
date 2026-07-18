@@ -8,7 +8,7 @@ Grouping rules:
     lists every parent where the item is used.
 
 Layout:
-  4 cards per A4 portrait page in a 2×2 grid — fills left-to-right (FILL PE RAND).
+  2 cards per A4 portrait page, stacked vertically (left-to-right).
 """
 
 import os
@@ -31,10 +31,10 @@ _EXCLUDED_CATS = {"welding_drawing", "bending_drawing"}
 
 _PLACEHOLDER_SVG = (
     '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
-    '<rect x="5" y="5" width="90" height="90" rx="6" fill="#f5f5f5" stroke="#bbb" stroke-width="2"/>'
-    '<line x1="15" y1="15" x2="85" y2="85" stroke="#ddd" stroke-width="2"/>'
-    '<line x1="85" y1="15" x2="15" y2="85" stroke="#ddd" stroke-width="2"/>'
-    '<rect x="30" y="30" width="40" height="40" rx="3" fill="none" stroke="#ccc" stroke-width="2"/>'
+    '<rect x="5" y="5" width="90" height="90" rx="6" fill="#f0f2f5" stroke="#c0c5cc" stroke-width="2"/>'
+    '<line x1="15" y1="15" x2="85" y2="85" stroke="#d8dce2" stroke-width="2"/>'
+    '<line x1="85" y1="15" x2="15" y2="85" stroke="#d8dce2" stroke-width="2"/>'
+    '<rect x="28" y="28" width="44" height="44" rx="4" fill="none" stroke="#c8cdd6" stroke-width="2"/>'
     '</svg>'
 ).encode()
 _PLACEHOLDER_URI = "data:image/svg+xml;base64," + base64.b64encode(_PLACEHOLDER_SVG).decode()
@@ -99,7 +99,7 @@ _CSS = """
 @page { size: A4 portrait; margin: 6mm; }
 body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; background: #fff; }
 
-/* ── Page: 2 wide horizontal cards stacked per A4 page ── */
+/* ── Page: 2 wide cards stacked vertically per A4 ── */
 .page {
   display: flex;
   flex-direction: column;
@@ -117,7 +117,7 @@ body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; background: 
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  flex: 0 1 132mm;   /* wide + roughly half-page tall */
+  flex: 0 1 132mm;
 }
 .card-empty {
   border: 1px dashed #ccc;
@@ -131,80 +131,105 @@ body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; background: 
   flex-direction: row;
   border-bottom: 2px solid #000;
   flex-shrink: 0;
-  min-height: 32mm;
-  max-height: 42mm;
+  min-height: 47mm;
+  max-height: 52mm;
 }
 
+/* ── Image area ── */
 .card-icon {
-  width: 32mm;
+  width: 46mm;
   flex-shrink: 0;
-  border-right: 1.5px solid #999;
+  border-right: 1.5px solid #888;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
-  background: #fff;
+  padding: 5px;
+  background: #fafafa;
 }
 .card-icon img {
-  max-width: 28mm;
-  max-height: 30mm;
+  max-width: 43mm;
+  max-height: 45mm;
   object-fit: contain;
 }
 
+/* ── Info column: flex-column so barcode always sits at bottom ── */
 .card-info {
   flex: 1;
-  position: relative;
-  padding-bottom: 16mm;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
+.card-info-content {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
 .info-type {
-  font-size: 5.5pt;
-  color: #777;
+  font-size: 6.5pt;
+  color: #555;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 3px 6px 0;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  padding: 3px 7px 2px;
+  background: #f2f4f7;
+  border-bottom: 1px solid #dde0e6;
 }
 .info-name {
-  font-size: 11pt;
+  font-size: 15pt;
   font-weight: bold;
-  line-height: 1.1;
-  padding: 1px 6px 3px;
-  border-bottom: 1px solid #ccc;
+  line-height: 1.15;
+  padding: 3px 7px 4px;
+  border-bottom: 1px solid #bbb;
   word-break: break-word;
+  overflow-wrap: break-word;
+}
+.info-code {
+  font-family: monospace;
+  font-size: 9.5pt;
+  font-weight: 700;
+  color: #1a1a2e;
+  letter-spacing: 0.4px;
+  padding: 2px 7px 2px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f7f8fa;
 }
 .info-qty {
-  font-size: 8pt;
+  font-size: 11pt;
   font-weight: bold;
-  padding: 2px 6px;
-  color: #333;
-  border-bottom: 1px solid #eee;
+  padding: 3px 7px;
+  color: #0f172a;
+  border-bottom: 1px solid #e8e8e8;
+  letter-spacing: 0.2px;
 }
 .info-project {
-  font-size: 7pt;
-  padding: 2px 6px;
-  border-bottom: 1px solid #ccc;
+  font-size: 8.5pt;
+  padding: 2px 7px 3px;
   color: #333;
+  word-break: break-word;
 }
 .info-project strong { font-weight: 700; color: #000; }
+
+/* ── Barcode: always at bottom of card-info ── */
 .info-barcode {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 2px 6px 3px;
+  flex-shrink: 0;
+  padding: 3px 7px 4px;
+  border-top: 1px solid #ccc;
+  background: #fff;
 }
 .barcode-lbl {
   font-size: 5.5pt;
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: #888;
+  color: #999;
   margin-bottom: 1px;
 }
 .barcode-bars {
-  width: 44mm;
-  height: 9mm;
-  margin-bottom: 1px;
+  width: 52mm;
+  height: 10mm;
+  margin-bottom: 2px;
   border: 1px solid #222;
   background: repeating-linear-gradient(
     90deg,
@@ -219,9 +244,10 @@ body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; background: 
 }
 .barcode-val {
   font-family: monospace;
-  font-size: 6pt;
-  color: #222;
-  letter-spacing: 0.4px;
+  font-size: 6.5pt;
+  color: #111;
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 /* ── Steps ── */
@@ -441,10 +467,13 @@ def _card(
     barcode_display = code or entity_id[:12].upper()
     payload = build_project_item_barcode_payload(project_id, entity_type, entity_id, code)
 
-    # Quantity header line (shown when total_qty provided, i.e. for grouped cards)
+    # Entity code block (always shown when available)
+    code_html = f'<div class="info-code">{code}</div>' if code else ''
+
+    # Quantity line (shown for all cards that have a known quantity)
     qty_html = ""
     if total_qty is not None:
-        qty_html = f'<div class="info-qty">Total: ×{_fmt_qty(total_qty)}</div>'
+        qty_html = f'<div class="info-qty">Cantitate: ×{_fmt_qty(total_qty)}</div>'
 
     # Steps section
     steps_html = _steps_rows(steps, project_id, entity_type, entity_id)
@@ -462,10 +491,13 @@ def _card(
   <div class="card-top">
     <div class="card-icon"><img src="{img}" alt=""/></div>
     <div class="card-info">
-      <div class="info-type">{type_label}</div>
-      <div class="info-name">{name}</div>
-      {qty_html}
-      <div class="info-project">Proiect: <strong>{proj_code}</strong> — {proj_name}</div>
+      <div class="card-info-content">
+        <div class="info-type">{type_label}</div>
+        <div class="info-name">{name}</div>
+        {code_html}
+        {qty_html}
+        <div class="info-project">Proiect: <strong>{proj_code}</strong> — {proj_name}</div>
+      </div>
       <div class="info-barcode">
         <div class="barcode-lbl">Cod de bare</div>
         <div class="barcode-bars" data-payload="{payload}"></div>
@@ -641,6 +673,7 @@ def _collect_cards(project, db: Session) -> list[str]:
                     "product", product.id, product.name, product.code,
                     "Produs", prod_steps, proj_code, proj_name, db,
                     project_id=project_id, composition=composition,
+                    total_qty=item_qty,  # products now also receive their project quantity
                 )
             )
 
@@ -724,7 +757,7 @@ def generate_production_cards_pdf(project, db: Session) -> bytes:
             '</body></html>'
         )).write_pdf()
 
-    # 2 cards per page, side-by-side (left-to-right)
+    # 2 cards per page, stacked vertically
     pages = []
     for i in range(0, len(cards), 2):
         group = cards[i:i + 2]
