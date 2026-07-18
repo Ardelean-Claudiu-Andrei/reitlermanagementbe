@@ -33,5 +33,13 @@ class Part(Base):
     technical_drawing_location = Column(String(500), default="")
     production_steps = Column(JSON, default=list)                 # [AssemblyStep dicts]
     notes = Column(Text, default="")
+    requires_purchase = Column(Boolean, nullable=False, default=False)
+    purchase_supplier = Column(String(300), default="")
+    purchase_price = Column(Float, nullable=True)
+    purchase_currency = Column(String(10), default="EUR")
+    purchase_vat_included = Column(Boolean, nullable=False, default=False)
+    purchase_vat_rate = Column(Float, nullable=False, default=21.0)
+    purchase_agent_contact = Column(String(300), default="")
+    purchase_details = Column(Text, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
