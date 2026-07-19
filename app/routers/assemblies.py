@@ -23,6 +23,14 @@ class AssemblyCreate(BaseModel):
     cadLocation: str = ""
     productionSteps: list = []
     notes: str = ""
+    requiresPurchase: bool = False
+    purchaseSupplier: str = ""
+    purchasePrice: Optional[float] = None
+    purchaseCurrency: str = "EUR"
+    purchaseVatIncluded: bool = False
+    purchaseVatRate: float = 21.0
+    purchaseAgentContact: str = ""
+    purchaseDetails: str = ""
 
 
 class AssemblyUpdate(BaseModel):
@@ -38,6 +46,14 @@ class AssemblyUpdate(BaseModel):
     cadLocation: Optional[str] = None
     productionSteps: Optional[list] = None
     notes: Optional[str] = None
+    requiresPurchase: Optional[bool] = None
+    purchaseSupplier: Optional[str] = None
+    purchasePrice: Optional[float] = None
+    purchaseCurrency: Optional[str] = None
+    purchaseVatIncluded: Optional[bool] = None
+    purchaseVatRate: Optional[float] = None
+    purchaseAgentContact: Optional[str] = None
+    purchaseDetails: Optional[str] = None
 
 
 def assembly_to_dict(a: Assembly) -> dict:
@@ -55,6 +71,14 @@ def assembly_to_dict(a: Assembly) -> dict:
         "cadLocation": a.cad_location or "",
         "productionSteps": a.production_steps or [],
         "notes": a.notes or "",
+        "requiresPurchase": bool(a.requires_purchase),
+        "purchaseSupplier": a.purchase_supplier or "",
+        "purchasePrice": a.purchase_price,
+        "purchaseCurrency": a.purchase_currency or "EUR",
+        "purchaseVatIncluded": bool(a.purchase_vat_included),
+        "purchaseVatRate": a.purchase_vat_rate if a.purchase_vat_rate is not None else 21.0,
+        "purchaseAgentContact": a.purchase_agent_contact or "",
+        "purchaseDetails": a.purchase_details or "",
         "createdAt": a.created_at.isoformat() if a.created_at else None,
         "updatedAt": a.updated_at.isoformat() if a.updated_at else None,
     }
@@ -120,6 +144,14 @@ def create_assembly(
         cad_location=body.cadLocation or "",
         production_steps=body.productionSteps or [],
         notes=body.notes,
+        requires_purchase=body.requiresPurchase,
+        purchase_supplier=body.purchaseSupplier,
+        purchase_price=body.purchasePrice,
+        purchase_currency=body.purchaseCurrency,
+        purchase_vat_included=body.purchaseVatIncluded,
+        purchase_vat_rate=body.purchaseVatRate,
+        purchase_agent_contact=body.purchaseAgentContact,
+        purchase_details=body.purchaseDetails,
     )
     db.add(a)
     db.commit()
@@ -171,6 +203,22 @@ def update_assembly(
         a.production_steps = body.productionSteps
     if body.notes is not None:
         a.notes = body.notes
+    if body.requiresPurchase is not None:
+        a.requires_purchase = body.requiresPurchase
+    if body.purchaseSupplier is not None:
+        a.purchase_supplier = body.purchaseSupplier
+    if body.purchasePrice is not None:
+        a.purchase_price = body.purchasePrice
+    if body.purchaseCurrency is not None:
+        a.purchase_currency = body.purchaseCurrency
+    if body.purchaseVatIncluded is not None:
+        a.purchase_vat_included = body.purchaseVatIncluded
+    if body.purchaseVatRate is not None:
+        a.purchase_vat_rate = body.purchaseVatRate
+    if body.purchaseAgentContact is not None:
+        a.purchase_agent_contact = body.purchaseAgentContact
+    if body.purchaseDetails is not None:
+        a.purchase_details = body.purchaseDetails
     db.commit()
     db.refresh(a)
     return assembly_to_dict(a)

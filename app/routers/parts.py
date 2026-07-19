@@ -32,6 +32,14 @@ class PartCreate(BaseModel):
     notes: str = ""
     fileName: str = ""
     fileLocation: str = ""
+    requiresPurchase: bool = False
+    purchaseSupplier: str = ""
+    purchasePrice: Optional[float] = None
+    purchaseCurrency: str = "EUR"
+    purchaseVatIncluded: bool = False
+    purchaseVatRate: float = 21.0
+    purchaseAgentContact: str = ""
+    purchaseDetails: str = ""
 
 
 class PartUpdate(BaseModel):
@@ -56,6 +64,14 @@ class PartUpdate(BaseModel):
     notes: Optional[str] = None
     fileName: Optional[str] = None
     fileLocation: Optional[str] = None
+    requiresPurchase: Optional[bool] = None
+    purchaseSupplier: Optional[str] = None
+    purchasePrice: Optional[float] = None
+    purchaseCurrency: Optional[str] = None
+    purchaseVatIncluded: Optional[bool] = None
+    purchaseVatRate: Optional[float] = None
+    purchaseAgentContact: Optional[str] = None
+    purchaseDetails: Optional[str] = None
 
 
 def part_to_dict(p: Part) -> dict:
@@ -82,6 +98,14 @@ def part_to_dict(p: Part) -> dict:
         "notes": p.notes or "",
         "fileName": p.file_name or "",
         "fileLocation": p.file_location or "",
+        "requiresPurchase": p.requires_purchase or False,
+        "purchaseSupplier": p.purchase_supplier or "",
+        "purchasePrice": p.purchase_price,
+        "purchaseCurrency": p.purchase_currency or "EUR",
+        "purchaseVatIncluded": p.purchase_vat_included or False,
+        "purchaseVatRate": p.purchase_vat_rate if p.purchase_vat_rate is not None else 21.0,
+        "purchaseAgentContact": p.purchase_agent_contact or "",
+        "purchaseDetails": p.purchase_details or "",
         "createdAt": p.created_at.isoformat() if p.created_at else None,
         "updatedAt": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -138,6 +162,14 @@ def create_part(
         notes=body.notes,
         file_name=body.fileName,
         file_location=body.fileLocation,
+        requires_purchase=body.requiresPurchase,
+        purchase_supplier=body.purchaseSupplier,
+        purchase_price=body.purchasePrice,
+        purchase_currency=body.purchaseCurrency,
+        purchase_vat_included=body.purchaseVatIncluded,
+        purchase_vat_rate=body.purchaseVatRate,
+        purchase_agent_contact=body.purchaseAgentContact,
+        purchase_details=body.purchaseDetails,
     )
     db.add(p)
     db.commit()
@@ -199,6 +231,22 @@ def update_part(
         p.file_name = body.fileName
     if body.fileLocation is not None:
         p.file_location = body.fileLocation
+    if body.requiresPurchase is not None:
+        p.requires_purchase = body.requiresPurchase
+    if body.purchaseSupplier is not None:
+        p.purchase_supplier = body.purchaseSupplier
+    if body.purchasePrice is not None:
+        p.purchase_price = body.purchasePrice
+    if body.purchaseCurrency is not None:
+        p.purchase_currency = body.purchaseCurrency
+    if body.purchaseVatIncluded is not None:
+        p.purchase_vat_included = body.purchaseVatIncluded
+    if body.purchaseVatRate is not None:
+        p.purchase_vat_rate = body.purchaseVatRate
+    if body.purchaseAgentContact is not None:
+        p.purchase_agent_contact = body.purchaseAgentContact
+    if body.purchaseDetails is not None:
+        p.purchase_details = body.purchaseDetails
     db.commit()
     db.refresh(p)
     return part_to_dict(p)

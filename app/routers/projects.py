@@ -393,7 +393,7 @@ def update_project_status(
         "id": str(uuid.uuid4()),
         "action": f"Status changed to {body.status.replace('-', ' ')}",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     db.commit()
@@ -420,7 +420,7 @@ def finish_project(
         "id": str(uuid.uuid4()),
         "action": "Project finished",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     db.commit()
@@ -489,7 +489,7 @@ def add_project_issue(
         "id": str(uuid.uuid4()),
         "action": f"Issue reported: {body.description[:50]}",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     db.commit()
@@ -521,7 +521,7 @@ def resolve_issue(
         "id": str(uuid.uuid4()),
         "action": "Issue resolved",
         "user": current_user.name,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     p.activity = activity
     flag_modified(p, "activity")
@@ -582,7 +582,7 @@ def create_project_from_quote(
             "id": str(uuid.uuid4()),
             "action": "Project created from quote",
             "user": current_user.name,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }],
     )
     db.add(p)
@@ -659,6 +659,29 @@ def export_project_laser_cutting_pdf(
     pdf_bytes = generate_project_laser_cutting_pdf(p, db)
 
     filename = f"taiere-laser-{p.code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{project_id}/export-purchase-list")
+def export_project_purchase_list_pdf(
+    project_id: str,
+    purchased: str = "",
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    purchased_set = set(purchased.split(",")) if purchased else set()
+    from app.services.purchase_list_pdf_service import generate_purchase_list_pdf
+    pdf_bytes = generate_purchase_list_pdf(p, db, purchased_set=purchased_set)
+
+    filename = f"achizitii-{p.code}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
