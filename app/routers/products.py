@@ -26,6 +26,14 @@ class ProductCreate(BaseModel):
     assemblySteps: list = []
     productionSteps: list = []
     notes: str = ""
+    requiresPurchase: bool = False
+    purchaseSupplier: str = ""
+    purchasePrice: Optional[float] = None
+    purchaseCurrency: str = "EUR"
+    purchaseVatIncluded: bool = False
+    purchaseVatRate: float = 21.0
+    purchaseAgentContact: str = ""
+    purchaseDetails: str = ""
 
 
 class ProductUpdate(BaseModel):
@@ -42,6 +50,14 @@ class ProductUpdate(BaseModel):
     assemblySteps: Optional[list] = None
     productionSteps: Optional[list] = None
     notes: Optional[str] = None
+    requiresPurchase: Optional[bool] = None
+    purchaseSupplier: Optional[str] = None
+    purchasePrice: Optional[float] = None
+    purchaseCurrency: Optional[str] = None
+    purchaseVatIncluded: Optional[bool] = None
+    purchaseVatRate: Optional[float] = None
+    purchaseAgentContact: Optional[str] = None
+    purchaseDetails: Optional[str] = None
 
 
 def product_to_dict(p: Product) -> dict:
@@ -72,6 +88,14 @@ def product_to_dict(p: Product) -> dict:
         "assemblySteps": p.assembly_steps or [],
         "productionSteps": p.production_steps or [],
         "notes": p.notes or "",
+        "requiresPurchase": bool(p.requires_purchase) if p.requires_purchase is not None else False,
+        "purchaseSupplier": p.purchase_supplier or "",
+        "purchasePrice": p.purchase_price,
+        "purchaseCurrency": p.purchase_currency or "EUR",
+        "purchaseVatIncluded": bool(p.purchase_vat_included) if p.purchase_vat_included is not None else False,
+        "purchaseVatRate": p.purchase_vat_rate if p.purchase_vat_rate is not None else 21.0,
+        "purchaseAgentContact": p.purchase_agent_contact or "",
+        "purchaseDetails": p.purchase_details or "",
         "createdAt": p.created_at.isoformat() if p.created_at else None,
         "updatedAt": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -160,6 +184,14 @@ def create_product(
         assembly_steps=body.assemblySteps or [],
         production_steps=body.productionSteps or [],
         notes=body.notes,
+        requires_purchase=body.requiresPurchase,
+        purchase_supplier=body.purchaseSupplier,
+        purchase_price=body.purchasePrice,
+        purchase_currency=body.purchaseCurrency,
+        purchase_vat_included=body.purchaseVatIncluded,
+        purchase_vat_rate=body.purchaseVatRate,
+        purchase_agent_contact=body.purchaseAgentContact,
+        purchase_details=body.purchaseDetails or None,
     )
     db.add(p)
     db.commit()
@@ -205,6 +237,22 @@ def update_product(
         p.production_steps = body.productionSteps
     if body.notes is not None:
         p.notes = body.notes
+    if body.requiresPurchase is not None:
+        p.requires_purchase = body.requiresPurchase
+    if body.purchaseSupplier is not None:
+        p.purchase_supplier = body.purchaseSupplier
+    if body.purchasePrice is not None:
+        p.purchase_price = body.purchasePrice
+    if body.purchaseCurrency is not None:
+        p.purchase_currency = body.purchaseCurrency
+    if body.purchaseVatIncluded is not None:
+        p.purchase_vat_included = body.purchaseVatIncluded
+    if body.purchaseVatRate is not None:
+        p.purchase_vat_rate = body.purchaseVatRate
+    if body.purchaseAgentContact is not None:
+        p.purchase_agent_contact = body.purchaseAgentContact
+    if body.purchaseDetails is not None:
+        p.purchase_details = body.purchaseDetails or None
     db.commit()
     db.refresh(p)
     return product_to_dict(p)

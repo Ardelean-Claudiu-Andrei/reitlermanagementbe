@@ -187,6 +187,13 @@ def _collect_purchase_items(project: Project, db: Session) -> list[dict]:
             product = db.query(ProductModel).filter(ProductModel.id == product_id).first()
             if not product:
                 continue
+            # Check if the product itself needs to be purchased
+            if product.requires_purchase:
+                key = ("product", product_id)
+                if key in accumulated:
+                    accumulated[key]["quantity"] += qty
+                else:
+                    accumulated[key] = {"entity": product, "entity_type": "product", "quantity": qty}
             # Direct part entries on product
             for pp in (product.product_parts or []):
                 p_id = pp.get("partId") if isinstance(pp, dict) else getattr(pp, "part_id", None)
@@ -245,7 +252,7 @@ def generate_purchase_list_pdf(project: Project, db: Session) -> bytes:
             entity = row["entity"]
             entity_type = row["entity_type"]
             qty: int = row["quantity"]
-            type_label = "Ansamblu" if entity_type == "assembly" else "Piesă"
+            type_label = "Ansamblu" if entity_type == "assembly" else "Produs" if entity_type == "product" else "Piesă"
             code_html = f'<span class="code">{entity.code} &middot; {type_label}</span>' if entity.code else f'<span class="code">{type_label}</span>'
             body_rows.append(ROW_TEMPLATE.format(
                 name=entity.name or "—",
