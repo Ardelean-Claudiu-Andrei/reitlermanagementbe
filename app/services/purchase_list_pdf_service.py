@@ -51,6 +51,15 @@ HTML_TEMPLATE = """
     .name {{ font-weight: bold; color: #1a1a2e; }}
     .code {{ font-family: monospace; font-size: 7.5pt; color: #777; display: block; margin-top: 1px; }}
 
+    .cb-cell {{ width: 20px; text-align: center; vertical-align: middle; }}
+    .checkbox {{
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border: 1.5px solid #555;
+      border-radius: 2px;
+    }}
+
     .vat-badge {{
       display: inline-block;
       background: #fef3c7;
@@ -109,6 +118,7 @@ HTML_TEMPLATE = """
 
 ROW_TEMPLATE = """
 <tr>
+  <td class="cb-cell"><span class="checkbox"></span></td>
   <td>
     <span class="name">{name}</span>
     {code_html}
@@ -224,10 +234,14 @@ def _collect_purchase_items(project: Project, db: Session) -> list[dict]:
     return sorted(accumulated.values(), key=lambda x: x["entity"].name or "")
 
 
-def generate_purchase_list_pdf(project: Project, db: Session) -> bytes:
+def generate_purchase_list_pdf(project: Project, db: Session, purchased_set: set | None = None) -> bytes:
     from weasyprint import HTML
 
-    rows = _collect_purchase_items(project, db)
+    all_rows = _collect_purchase_items(project, db)
+    if purchased_set:
+        rows = [r for r in all_rows if f"{r['entity_type']}:{r['entity'].id}" not in purchased_set]
+    else:
+        rows = all_rows
 
     if not rows:
         table_html = "<p style='color:#888;font-style:italic;margin-top:8px'>Niciun element marcat pentru achiziție.</p>"
@@ -238,6 +252,7 @@ def generate_purchase_list_pdf(project: Project, db: Session) -> bytes:
         <table>
           <thead>
             <tr>
+              <th class="cb-cell"></th>
               <th>Element</th>
               <th class="right">Cant.</th>
               <th>Furnizor</th>
