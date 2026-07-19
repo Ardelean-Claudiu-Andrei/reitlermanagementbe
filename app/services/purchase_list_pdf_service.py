@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.part import Part
+from app.models.assembly import Assembly
 from app.services.assembly_tree import iter_assembly_parts
 
 HTML_TEMPLATE = """
@@ -122,21 +123,22 @@ ROW_TEMPLATE = """
 """
 
 
-def _price_html(part: Part) -> str:
-    if part.purchase_price is None:
+def _price_html(entity) -> str:
+    if entity.purchase_price is None:
         return "—"
-    currency = part.purchase_currency or "EUR"
-    price_str = f"{part.purchase_price:g} {currency}"
-    if part.purchase_vat_included:
-        rate = int(part.purchase_vat_rate) if part.purchase_vat_rate == int(part.purchase_vat_rate) else part.purchase_vat_rate
+    currency = entity.purchase_currency or "EUR"
+    price_str = f"{entity.purchase_price:g} {currency}"
+    if entity.purchase_vat_included:
+        rate = int(entity.purchase_vat_rate) if entity.purchase_vat_rate == int(entity.purchase_vat_rate) else entity.purchase_vat_rate
         return f'{price_str} <span class="vat-badge">TVA {rate}%</span>'
     return f"{price_str} <em style='font-size:8pt;color:#999'>fără TVA</em>"
 
 
-def _collect_purchase_parts(project: Project, db: Session) -> list[dict]:
-    """Return list of {part, quantity} for all parts with requiresPurchase=True in the project."""
+def _collect_purchase_items(project: Project, db: Session) -> list[dict]:
+    """Return list of {entity, entity_type, quantity} for all items needing purchase in the project."""
     items = project.items or []
-    accumulated: dict[str, dict] = {}
+    # Use (entity_type, entity_id) as key to avoid collisions between part and assembly IDs
+    accumulated: dict[tuple, dict] = {}
 
     for item in items:
         item_type = item.get("type", "product")
@@ -146,25 +148,36 @@ def _collect_purchase_parts(project: Project, db: Session) -> list[dict]:
             part_id = item.get("partId")
             if not part_id:
                 continue
-            if part_id in accumulated:
-                accumulated[part_id]["quantity"] += qty
+            key = ("part", part_id)
+            if key in accumulated:
+                accumulated[key]["quantity"] += qty
             else:
                 part = db.query(Part).filter(Part.id == part_id).first()
                 if part and part.requires_purchase:
-                    accumulated[part_id] = {"part": part, "quantity": qty}
+                    accumulated[key] = {"entity": part, "entity_type": "part", "quantity": qty}
 
         elif item_type == "assembly":
             asm_id = item.get("assemblyId")
             if not asm_id:
                 continue
+            # Check if the assembly itself needs to be purchased
+            asm = db.query(Assembly).filter(Assembly.id == asm_id).first()
+            if asm and asm.requires_purchase:
+                key = ("assembly", asm_id)
+                if key in accumulated:
+                    accumulated[key]["quantity"] += qty
+                else:
+                    accumulated[key] = {"entity": asm, "entity_type": "assembly", "quantity": qty}
+            # Also collect purchase parts within the assembly
             for part, part_qty in iter_assembly_parts(asm_id, db):
                 if not part.requires_purchase:
                     continue
                 total_qty = int(part_qty) * qty
-                if part.id in accumulated:
-                    accumulated[part.id]["quantity"] += total_qty
+                key = ("part", part.id)
+                if key in accumulated:
+                    accumulated[key]["quantity"] += total_qty
                 else:
-                    accumulated[part.id] = {"part": part, "quantity": total_qty}
+                    accumulated[key] = {"entity": part, "entity_type": "part", "quantity": total_qty}
 
         elif item_type == "product":
             from app.models.product import Product as ProductModel
@@ -182,10 +195,11 @@ def _collect_purchase_parts(project: Project, db: Session) -> list[dict]:
                 part = db.query(Part).filter(Part.id == p_id).first()
                 if not part or not part.requires_purchase:
                     continue
-                if p_id in accumulated:
-                    accumulated[p_id]["quantity"] += total_qty
+                key = ("part", p_id)
+                if key in accumulated:
+                    accumulated[key]["quantity"] += total_qty
                 else:
-                    accumulated[p_id] = {"part": part, "quantity": total_qty}
+                    accumulated[key] = {"entity": part, "entity_type": "part", "quantity": total_qty}
             # Assembly trees
             for pa in (product.product_assemblies or []):
                 a_id = pa.get("assemblyId") if isinstance(pa, dict) else getattr(pa, "assembly_id", None)
@@ -194,21 +208,22 @@ def _collect_purchase_parts(project: Project, db: Session) -> list[dict]:
                     if not part.requires_purchase:
                         continue
                     total_qty = int(part_qty) * int(a_qty) * qty
-                    if part.id in accumulated:
-                        accumulated[part.id]["quantity"] += total_qty
+                    key = ("part", part.id)
+                    if key in accumulated:
+                        accumulated[key]["quantity"] += total_qty
                     else:
-                        accumulated[part.id] = {"part": part, "quantity": total_qty}
+                        accumulated[key] = {"entity": part, "entity_type": "part", "quantity": total_qty}
 
-    return sorted(accumulated.values(), key=lambda x: x["part"].name or "")
+    return sorted(accumulated.values(), key=lambda x: x["entity"].name or "")
 
 
 def generate_purchase_list_pdf(project: Project, db: Session) -> bytes:
     from weasyprint import HTML
 
-    rows = _collect_purchase_parts(project, db)
+    rows = _collect_purchase_items(project, db)
 
     if not rows:
-        table_html = "<p style='color:#888;font-style:italic;margin-top:8px'>Nicio piesă marcată pentru achiziție.</p>"
+        table_html = "<p style='color:#888;font-style:italic;margin-top:8px'>Niciun element marcat pentru achiziție.</p>"
         part_count = 0
         total_qty = 0
     else:
@@ -216,7 +231,7 @@ def generate_purchase_list_pdf(project: Project, db: Session) -> bytes:
         <table>
           <thead>
             <tr>
-              <th>Piesă</th>
+              <th>Element</th>
               <th class="right">Cant.</th>
               <th>Furnizor</th>
               <th>Preț</th>
@@ -227,22 +242,24 @@ def generate_purchase_list_pdf(project: Project, db: Session) -> bytes:
         """
         body_rows = []
         for row in rows:
-            part: Part = row["part"]
+            entity = row["entity"]
+            entity_type = row["entity_type"]
             qty: int = row["quantity"]
-            code_html = f'<span class="code">{part.code}</span>' if part.code else ""
+            type_label = "Ansamblu" if entity_type == "assembly" else "Piesă"
+            code_html = f'<span class="code">{entity.code} &middot; {type_label}</span>' if entity.code else f'<span class="code">{type_label}</span>'
             body_rows.append(ROW_TEMPLATE.format(
-                name=part.name or "—",
+                name=entity.name or "—",
                 code_html=code_html,
                 quantity=qty,
-                supplier=part.purchase_supplier or "—",
-                price_html=_price_html(part),
-                contact=part.purchase_agent_contact or "—",
+                supplier=entity.purchase_supplier or "—",
+                price_html=_price_html(entity),
+                contact=entity.purchase_agent_contact or "—",
             ))
         table_html = header + "".join(body_rows) + "</tbody></table>"
         part_count = len(rows)
         total_qty = sum(r["quantity"] for r in rows)
 
-    part_label = "piesă" if part_count == 1 else "piese"
+    part_label = "element" if part_count == 1 else "elemente"
     generated_at = datetime.now().strftime("%d.%m.%Y %H:%M")
 
     html = HTML_TEMPLATE.format(
